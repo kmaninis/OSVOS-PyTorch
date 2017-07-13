@@ -17,7 +17,6 @@ from custom_layers import class_balanced_cross_entropy_loss
 # Setting of parameters
 # Parameters in p are used for the name of the model
 p = {
-    'useRandom': 1,  # Shuffle Images
     'trainBatch': 1,  # Number of Images in each mini-batch
     }
 
@@ -63,7 +62,6 @@ optimizer = optim.SGD([
     {'params': net.fuse.weight, 'lr': lr/100, 'weight_decay': wd},
     {'params': net.fuse.bias, 'lr': 2*lr/100},
     ], lr=lr, momentum=0.9)
-# optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=0.0002)
 
 
 # Preparation of the data loaders
@@ -73,7 +71,7 @@ composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)
-trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=0, num_workers=1)
+trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=1, num_workers=1)
 
 # Testing dataset and its iterator
 db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor())
@@ -87,7 +85,7 @@ loss_tr = []
 loss_ts = []
 aveGrad = 0
 
-modelName = tb.construct_name(p, "OSVOS")
+modelName = tb.construct_name(p, "OSVOS_parent")
 
 print("Training Network")
 
@@ -169,69 +167,3 @@ for epoch in range(0, nEpochs):
                 for l in range(0, len(running_loss_ts)):
                     print('***Testing *** Loss %d: %f' % (l, running_loss_ts[l]))
                     running_loss_ts[l] = 0
-
-#                     if epoch == 200:
-#                         print('haha')
-#                         x = outputs[1].data.cpu().numpy()[0, 0, :, :]
-#                         plt.imshow(1 / (1 + np.exp(-x)))
-# #
-# # Separate interactive plotting of test set results
-# plt.close("all")
-# plt.ion()
-# f, ax_arr = plt.subplots(1, 3)
-# for ii, sample_batched in enumerate(testloader):
-#     img, gt = sample_batched['image'], sample_batched['gt']
-#     inputs = img / 255 - 0.5
-#
-#     # Forward pass of the mini-batch
-#     inputs = Variable(inputs)
-#     if gpu_id >= 0:
-#         inputs = inputs.cuda()
-#
-#     output = net.forward(inputs)
-#     for jj in range(int(img.size()[0])):
-#         pred = np.transpose(output[len(output)-1].cpu().data.numpy()[jj, :, :, :], (1, 2, 0))
-#         img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
-#         gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
-#         # Plot the particular example
-#         ax_arr[0].cla()
-#         ax_arr[1].cla()
-#         ax_arr[2].cla()
-#         ax_arr[0].set_title("Input Image")
-#         ax_arr[1].set_title("Ground Truth")
-#         ax_arr[2].set_title("Detection")
-#         ax_arr[0].imshow(tb.im_normalize(img_))
-#         ax_arr[1].imshow(gt_)
-#         ax_arr[2].imshow(tb.im_normalize(pred))
-#         plt.pause(0.001)
-#
-#
-# # Separate interactive plotting of training set results
-# plt.close("all")
-# plt.ion()
-# f, ax_arr = plt.subplots(1, 3)
-# for ii, sample_batched in enumerate(trainloader):
-#     img, gt = sample_batched['image'], sample_batched['gt']
-#     inputs = img / 255 - 0.5
-#
-#     # Forward pass of the mini-batch
-#     inputs = Variable(inputs)
-#     if gpu_id >= 0:
-#         inputs = inputs.cuda()
-#
-#     output = net.forward(inputs)
-#     for jj in range(int(img.size()[0])):
-#         pred = np.transpose(output[len(output)-1].cpu().data.numpy()[jj, :, :, :], (1, 2, 0))
-#         img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
-#         gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
-#         # Plot the particular example
-#         ax_arr[0].cla()
-#         ax_arr[1].cla()
-#         ax_arr[2].cla()
-#         ax_arr[0].set_title("Input Image")
-#         ax_arr[1].set_title("Ground Truth")
-#         ax_arr[2].set_title("Detection")
-#         ax_arr[0].imshow(tb.im_normalize(img_))
-#         ax_arr[1].imshow(gt_)
-#         ax_arr[2].imshow(tb.im_normalize(pred))
-#         plt.pause(0.001)
