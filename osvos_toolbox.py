@@ -14,7 +14,7 @@ def im_normalize(im):
     """
     Normalize image
     """
-    imn = (im - im.min()) / (im.max() - im.min())
+    imn = (im - im.min()) / max(im.max() - im.min(), 1e-8)
     return imn
 
 
@@ -50,32 +50,49 @@ def overlay_mask(img, mask, transparency=0.5):
 
 
 class DAVISDataset(Dataset):
-    """Tool Dataset constructed using the PyTorch built-in functionalities"""
+    """DAVIS 2016 dataset constructed using the PyTorch built-in functionalities"""
 
     def __init__(self, train=True,
                  inputRes=None,
                  db_root_dir='/media/eec/external/Databases/Segmentation/DAVIS',
                  transform=None,
-                 meanval=(104.00699, 116.66877, 122.67892)):
+                 meanval=(104.00699, 116.66877, 122.67892),
+                 seq_name=None):
         """Loads image to label pairs for tool pose estimation
-        db_elements: the names of the video files
-        db_root_dir: dataset directory with subfolders "frames" and "Annotations"
+        db_root_dir: dataset directory with subfolders "JPEGImages" and "Annotations"
         """
         self.train = train
         self.inputRes = inputRes
         self.db_root_dir = db_root_dir
         self.transform = transform
         self.meanval = meanval
+        self.seq_name = seq_name
 
         if self.train:
             fname = 'train'
         else:
             fname = 'val'
 
-        with open(os.path.join(db_root_dir, fname + '.txt')) as f:
-            names = f.readlines()
-            img_list = ['JPEGImages/480p/' + x.strip() + '.jpg' for x in names]
-            labels = ['Annotations/480p/' + x.strip() + '.png' for x in names]
+        if self.seq_name is None:
+
+            # Initialize the original DAVIS splits for training the parent network
+            with open(os.path.join(db_root_dir, fname + '.txt')) as f:
+                names = f.readlines()
+                img_list = ['JPEGImages/480p/' + x.strip() + '.jpg' for x in names]
+                labels = ['Annotations/480p/' + x.strip() + '.png' for x in names]
+        else:
+
+            # Initialize the per sequence images for online training
+            names = np.sort(os.listdir(os.path.join(db_root_dir, 'JPEGImages/480p/', str(seq_name))))
+            img_list = ['JPEGImages/480p/' + str(seq_name) + '/' + os.path.splitext(x)[0] + '.jpg' for x in names]
+            labels = ['Annotations/480p/' + str(seq_name) + '/' + os.path.splitext(x)[0] + '.png' for x in names]
+
+            if self.train:
+                img_list = [img_list[0]]
+                labels = [labels[0]]
+            else:
+                img_list = img_list[1:]
+                labels = labels[1:]
 
         assert (len(labels) == len(img_list))
 
@@ -92,6 +109,10 @@ class DAVISDataset(Dataset):
         img, gt = self.make_img_gt_pair(idx)
 
         sample = {'image': img, 'gt': gt}
+
+        if self.seq_name is not None:
+            fname = os.path.join(self.seq_name, "%05d" % idx)
+            sample['fname'] = fname
 
         if self.transform:
             sample = self.transform(sample)
@@ -154,7 +175,9 @@ class ScaleNRotate(object):
         gt_ = cv2.warpAffine(gt, M, (w_gt, h_gt), flags=cv2.INTER_NEAREST)
         gt_ = gt_/np.max([gt_.max(), 1e-8])
 
-        return {'image': img_, 'gt': gt_}
+        sample['image'], sample['gt'] = img_, gt_
+
+        return sample
 
 
 class RandomHorizontalFlip(object):
@@ -168,7 +191,9 @@ class RandomHorizontalFlip(object):
             image = cv2.flip(image, flipCode=1)
             gt = cv2.flip(gt, flipCode=1)
 
-        return {'image': image, 'gt': gt}
+        sample['image'], sample['gt'] = image, gt
+
+        return sample
 
 
 class ToTensor(object):
@@ -185,12 +210,14 @@ class ToTensor(object):
         # torch image: C X H X W
         image = image.transpose((2, 0, 1))
         gt = gt.transpose((2, 0, 1))
+
         # print(image.shape)
         # print(gt.shape)
-        sys.stdout.flush()
+        # sys.stdout.flush()
 
-        return {'image': torch.from_numpy(image),
-                'gt': torch.from_numpy(gt)}
+        sample['image'], sample['gt'] = torch.from_numpy(image), torch.from_numpy(gt)
+
+        return sample
 
 
 if __name__ == '__main__':
@@ -199,12 +226,13 @@ if __name__ == '__main__':
     transforms = transforms.Compose([RandomHorizontalFlip(),
                                      ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25))])
 
-    a = DAVISDataset(train=True, transform=transforms,
-                     db_root_dir='/home/kmaninis/glusterfs/Databases/Boundary_Detection/DAVIS/')
+    db = DAVISDataset(train=True, transform=transforms,
+                      db_root_dir='/home/kmaninis/glusterfs/Databases/Boundary_Detection/DAVIS/',
+                      seq_name='blackswan')
 
-    b = a[77]
-    plt.imshow(overlay_mask(im_normalize(b['image']), b['gt']))
+    sample = db[0]
+    plt.imshow(overlay_mask(im_normalize(sample['image']), sample['gt']))
 
-    print('Maximum value of gt: ' + str(b['gt'].max()))
+    print('Maximum value of gt: ' + str(sample['gt'].max()))
     print('Unique values of gt: ')
-    print(np.unique(b['gt']))
+    print(np.unique(sample['gt']))

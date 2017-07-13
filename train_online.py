@@ -1,0 +1,187 @@
+# Includes
+from __future__ import division
+import sys
+sys.path.append("/home/kmaninis/scratch_net/reinhold/Kevis/Software/apps/pytorch/build/lib.linux-x86_64-2.7")  # Custom PyTorch
+import numpy as np
+import os
+import scipy.misc as sm
+import matplotlib.pyplot as plt
+import visualize as viz
+import osvos_toolbox as tb
+import torch
+from torch.autograd import Variable
+import torch.optim as optim
+from torchvision import transforms, utils
+from torch.utils.data import DataLoader
+import vgg_osvos as vo
+import timeit
+from custom_layers import class_balanced_cross_entropy_loss
+
+# Setting of parameters
+seq_name = 'blackswan'
+nEpochs = 2000  # Number of epochs for training
+db_root_dir = '/home/kmaninis/glusterfs/Databases/Boundary_Detection/DAVIS/'
+save_root_dir = '/scratch_net/reinhold_second/Results/VOSB/DAVIS/OSVOS-PyTorch/'
+vis_net = 0  # Visualize the network?
+snapshot = 2000  # Store a model every snapshot epochs
+nAveGrad = 5
+parentEpoch = 159
+
+# Parameters in p are used for the name of the model
+p = {
+    'trainBatch': 1,  # Number of Images in each mini-batch
+    }
+
+parentModelName = tb.construct_name(p, "OSVOS_parent")
+
+if "SGE_GPU" not in os.environ.keys():
+    gpu_id = -1  # Select which GPU, -1 if CPU
+else:
+    gpu_id = -1  # int(os.environ["SGE_GPU"])
+
+# Network definition
+net = vo.OSVOS(pretrained=0)
+net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+str(parentEpoch)+'.pth'),
+                               map_location=lambda storage, loc: storage))
+
+if gpu_id >= 0:
+    torch.cuda.set_device(device=gpu_id)
+    net.cuda()
+
+# Visualize the network
+if vis_net:
+    x = torch.randn(1, 3, 480, 854)
+    x = Variable(x)
+    if gpu_id >= 0:
+        x = x.cuda()
+    y = net.forward(x)
+    g = viz.make_dot(y, net.state_dict())
+    g.view()
+
+# Separate interactive testing
+vis_res = 1
+
+# Use the following optimizer
+lr = 1e-8
+wd = 0.0002
+optimizer = optim.SGD([
+    {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
+    {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': lr * 2},
+    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
+    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'bias' in pr[0]], 'lr': lr*2},
+    {'params': net.fuse.weight, 'lr': lr/100, 'weight_decay': wd},
+    {'params': net.fuse.bias, 'lr': 2*lr/100},
+    ], lr=lr, momentum=0.9)
+
+# Preparation of the data loaders
+# Define augmentation transformations as a composition
+composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
+                                          tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
+                                          tb.ToTensor()])
+# Training dataset and its iterator
+db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
+trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=1)
+
+# Testing dataset and its iterator
+db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
+testloader = DataLoader(db_test, batch_size=1, shuffle=False, num_workers=1)
+
+
+num_img_tr = len(trainloader)
+num_img_ts = len(testloader)
+running_loss_tr = 0
+loss_tr = []
+aveGrad = 0
+
+print("Training Network")
+start_time = timeit.default_timer()
+# Main Training and Testing Loop
+for epoch in range(0, nEpochs):
+    # One training epoch
+    for ii, sample_batched in enumerate(trainloader):
+
+        inputs, gts = sample_batched['image'], sample_batched['gt']
+
+        # Forward-Backward of the mini-batch
+        inputs, gts = Variable(inputs), Variable(gts)
+        if gpu_id >= 0:
+            inputs, gts = inputs.cuda(), gts.cuda()
+
+        outputs = net.forward(inputs)
+
+        # Compute the fuse loss
+        loss = class_balanced_cross_entropy_loss(outputs[-1], gts, size_average=False)
+        running_loss_tr += loss.data[0]
+
+        # Print stuff
+        if epoch % 100 == 99:
+            running_loss_tr /= num_img_tr
+            loss_tr.append(running_loss_tr)
+
+            print('[Epoch: %d, numImages: %5d]' % (epoch+1, ii + 1))
+            print('Loss: %f' % running_loss_tr)
+            running_loss_tr = 0
+
+        # Backward the averaged gradient
+        loss /= nAveGrad
+        loss.backward()
+        aveGrad += 1
+
+        # Update the weights once in nAveGrad forward passes
+        if aveGrad % nAveGrad == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+            aveGrad = 0
+
+    # Save the model
+    if (epoch % snapshot) == snapshot - 1 and epoch != 0:
+        torch.save(net.state_dict(), os.path.join(save_dir, seq_name + '_epoch-'+str(epoch)+'.pth'))
+
+stop_time = timeit.default_timer()
+print("Online training time: " + str(stop_time - start_time))
+
+
+# Testing Phase
+if vis_res:
+    plt.close("all")
+    plt.ion()
+    f, ax_arr = plt.subplots(1, 3)
+
+save_dir = os.path.join(save_root_dir, seq_name)
+if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
+
+print("Testing Network")
+# Main Testing Loop
+for ii, sample_batched in enumerate(testloader):
+
+    img, gt, fname = sample_batched['image'], sample_batched['gt'], sample_batched['fname']
+
+    # Forward of the mini-batch
+    inputs, gts = Variable(img, volatile=True), Variable(gt, volatile=True)
+    if gpu_id >= 0:
+        inputs, gts = img.cuda(), gt.cuda()
+
+    outputs = net.forward(inputs)
+
+    for jj in range(int(inputs.size()[0])):
+        pred = np.transpose(outputs[-1].cpu().data.numpy()[jj, :, :, :], (1, 2, 0))
+        pred = 1 / (1 + np.exp(-pred))
+        img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
+        gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
+
+        # Save the result
+        sm.imsave(os.path.join(save_dir, os.path.basename(fname[jj]) + '.png', pred))
+
+        if vis_res:
+            # Plot the particular example
+            ax_arr[0].cla()
+            ax_arr[1].cla()
+            ax_arr[2].cla()
+            ax_arr[0].set_title("Input Image")
+            ax_arr[1].set_title("Ground Truth")
+            ax_arr[2].set_title("Detection")
+            ax_arr[0].imshow(tb.im_normalize(img_))
+            ax_arr[1].imshow(gt_[:, :, 0])
+            ax_arr[2].imshow(tb.im_normalize(pred[:,:,0]))
+            plt.pause(0.001)
