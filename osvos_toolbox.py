@@ -1,6 +1,5 @@
 from __future__ import division
 import sys
-sys.path.append("/home/eec/Documents/external/deep_learning/pytorch/build/lib.linux-x86_64-2.7")  # Custom PyTorch
 import numpy as np
 import cv2
 from scipy.misc import imresize
@@ -43,12 +42,12 @@ def overlay_mask(img, mask, transparency=0.5):
     transparency: between 0 and 1
     """
     im_over = np.ndarray(img.shape)
-    im_over[:, :, 0] = (1 - mask[:, :, 0]) * img[:, :, 0] + mask[:, :, 0] * (
-    255 * transparency + (1 - transparency) * img[:, :, 0])
-    im_over[:, :, 1] = (1 - mask[:, :, 1]) * img[:, :, 1] + mask[:, :, 1] * (
-    255 * transparency + (1 - transparency) * img[:, :, 1])
-    im_over[:, :, 2] = (1 - mask[:, :, 2]) * img[:, :, 2] + mask[:, :, 2] * (
-    255 * transparency + (1 - transparency) * img[:, :, 2])
+    im_over[:, :, 0] = (1 - mask) * img[:, :, 0] + mask * (
+    transparency + (1 - transparency) * img[:, :, 0])
+    im_over[:, :, 1] = (1 - mask) * img[:, :, 1] + mask * (
+    transparency + (1 - transparency) * img[:, :, 1])
+    im_over[:, :, 2] = (1 - mask) * img[:, :, 2] + mask * (
+    transparency + (1 - transparency) * img[:, :, 2])
     return im_over
 
 
@@ -160,6 +159,20 @@ class ScaleNRotate(object):
         return {'image': img_, 'gt': gt_}
 
 
+class RandomHorizontalFlip(object):
+    """Horizontally flip the given image and ground truth randomly with a probability of 0.5."""
+
+    def __call__(self, sample):
+
+        image, gt = sample['image'], sample['gt']
+
+        if random.random() < 0.5:
+            image = cv2.flip(image, flipCode=1)
+            gt = cv2.flip(gt, flipCode=1)
+
+        return {'image': image, 'gt': gt}
+
+
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
@@ -182,14 +195,18 @@ class ToTensor(object):
                 'gt': torch.from_numpy(gt)}
 
 
-if __name__ == 'main':
+if __name__ == '__main__':
 
-    a = DAVISDataset(train=True, transform=ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)))
-    # a = DAVISDataset(train=True)
+    from torchvision import transforms
+    transforms = transforms.Compose([RandomHorizontalFlip(),
+                                     ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25))])
 
+    a = DAVISDataset(train=True, transform=transforms,
+                     db_root_dir='/home/kmaninis/glusterfs/Databases/Boundary_Detection/DAVIS/')
 
     b = a[77]
-    plt.imshow(im_normalize(b['image']))
-    plt.imshow(b['gt'])
-    b['gt'].max()
-    np.unique(b['gt'])
+    plt.imshow(overlay_mask(im_normalize(b['image']), b['gt']))
+
+    print('Maximum value of gt: ' + str(b['gt'].max()))
+    print('Unique values of gt: ')
+    print(np.unique(b['gt']))
