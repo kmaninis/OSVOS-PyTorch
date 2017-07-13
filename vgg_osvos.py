@@ -33,9 +33,7 @@ class OSVOS(nn.Module):
                                                  nn.ReLU(inplace=True)]))
 
                 # Make the layers of the score_dsn step
-                score_dsn.append(nn.Sequential(*[nn.Conv2d(16, 1, kernel_size=1, padding=0),
-                                                 nn.ReLU(inplace=True)]))
-
+                score_dsn.append(nn.Conv2d(16, 1, kernel_size=1, padding=0))
                 upscale.append(nn.Upsample(scale_factor=2**i, mode='bilinear'))
 
         self.upscale = upscale
