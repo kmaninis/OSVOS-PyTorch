@@ -42,12 +42,10 @@ def overlay_mask(img, mask, transparency=0.5):
     transparency: between 0 and 1
     """
     im_over = np.ndarray(img.shape)
-    im_over[:, :, 0] = (1 - mask) * img[:, :, 0] + mask * (
-    transparency + (1 - transparency) * img[:, :, 0])
-    im_over[:, :, 1] = (1 - mask) * img[:, :, 1] + mask * (
-    transparency + (1 - transparency) * img[:, :, 1])
-    im_over[:, :, 2] = (1 - mask) * img[:, :, 2] + mask * (
-    transparency + (1 - transparency) * img[:, :, 2])
+    im_over[:, :, 0] = (1 - mask) * img[:, :, 0] + mask * (transparency + (1 - transparency) * img[:, :, 0])
+    im_over[:, :, 1] = (1 - mask) * img[:, :, 1] + mask * (transparency + (1 - transparency) * img[:, :, 1])
+    im_over[:, :, 2] = (1 - mask) * img[:, :, 2] + mask * (transparency + (1 - transparency) * img[:, :, 2])
+
     return im_over
 
 

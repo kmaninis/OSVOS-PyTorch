@@ -68,8 +68,9 @@ optimizer = optim.SGD([
 
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
-composed_transforms = transforms.Compose([tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)), tb.ToTensor()])
-
+composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
+                                          tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
+                                          tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)
 trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=0, num_workers=1)
