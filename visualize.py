@@ -1,6 +1,4 @@
 from graphviz import Digraph
-import sys
-sys.path.append("/home/eec/Documents/external/deep_learning/pytorch/build/lib.linux-x86_64-2.7")  # Custom PyTorch
 import torch
 from torch.autograd import Variable
 from torchvision import models
@@ -18,7 +16,6 @@ def make_dot(var, params):
             require grad (TODO: make optional)
     """
     param_map = {id(v): k for k, v in params.items()}
-    #print(var)
 
     node_attr = dict(style='filled',
                      shape='box',
@@ -64,8 +61,8 @@ def make_dot(var, params):
 if __name__ == "__main__":
     inputs = torch.randn(1, 3, 224, 224)
     resnet18 = models.resnet18()
-    #vgg16 = models.vgg16()
-    #vgg16_pre = models.vgg16(pretrained=True)
+    # vgg16 = models.vgg16()
+    # vgg16_pre = models.vgg16(pretrained=True)
     y = resnet18(Variable(inputs))
     # print(y)
     g = make_dot(y, resnet18.state_dict())

@@ -7,7 +7,6 @@ import os
 import random
 import torch
 from torch.utils.data import Dataset
-from matplotlib import pyplot as plt
 
 
 def im_normalize(im):
@@ -111,6 +110,8 @@ class DAVISDataset(Dataset):
         sample = {'image': img, 'gt': gt}
 
         if self.seq_name is not None:
+            if not self.train:
+                idx += 1
             fname = os.path.join(self.seq_name, "%05d" % idx)
             sample['fname'] = fname
 
@@ -223,6 +224,8 @@ class ToTensor(object):
 if __name__ == '__main__':
 
     from torchvision import transforms
+    from matplotlib import pyplot as plt
+
     transforms = transforms.Compose([RandomHorizontalFlip(),
                                      ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25))])
 

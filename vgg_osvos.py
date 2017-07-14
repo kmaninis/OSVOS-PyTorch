@@ -17,6 +17,7 @@ class OSVOS(nn.Module):
                     ['M', 512, 512, 512]]
         in_channels = [3, 64, 128, 256, 512]
 
+        print("Constructing OSVOS architecture..")
         stages = []
         side_prep = []
         score_dsn = []
@@ -43,6 +44,7 @@ class OSVOS(nn.Module):
 
         self.fuse = nn.Conv2d(64, 1, kernel_size=1, padding=0)
 
+        print("Initializing weights..")
         self._initialize_weights(pretrained)
 
     def forward(self, x):
