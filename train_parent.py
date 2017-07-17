@@ -1,18 +1,28 @@
-# Includes
+# Package Includes
 from __future__ import division
-import numpy as np
+import sys
+sys.path.append("/home/eec/Documents/external/deep_learning/pytorch/build/lib.linux-x86_64-2.7")  # Custom PyTorch
 import os
-import matplotlib.pyplot as plt
+import socket
+import timeit
+
+# Custom includes
 import visualize as viz
 import osvos_toolbox as tb
+import vgg_osvos as vo
+from custom_layers import class_balanced_cross_entropy_loss
+
+# PyTorch includes
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
 from torchvision import transforms, utils
 from torch.utils.data import DataLoader
-import vgg_osvos as vo
-import timeit
-from custom_layers import class_balanced_cross_entropy_loss
+
+if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
+    gpu_id = 1  # Select which GPU, -1 if CPU
+else:
+    gpu_id = int(os.environ['SGE_GPU'])
 
 # Setting of parameters
 # Parameters in p are used for the name of the model
@@ -28,7 +38,6 @@ nTestInterval = 20  # Run on test set every nTestInterval epochs
 db_root_dir = '/media/eec/external/Databases/Segmentation/DAVIS/'
 save_dir = '/home/eec/Desktop/pytorch_experiments/osvos/'
 vis_net = 1  # Visualize the network?
-gpu_id = 0  # Select which GPU, -1 if CPU
 snapshot = 20  # Store a model every snapshot epochs
 nAveGrad = 10
 
@@ -67,7 +76,8 @@ optimizer = optim.SGD([
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
 composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
-                                          tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
+                                          tb.Resize(),
+                                        # tb.ScaleNRotate(rots=[0], scales=[0.5, 0.8, 1]),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)
@@ -85,7 +95,7 @@ loss_tr = []
 loss_ts = []
 aveGrad = 0
 
-modelName = tb.construct_name(p, "OSVOS_parent")
+modelName = tb.construct_name(p, "OSVOS_parent_exact")
 
 print("Training Network")
 
@@ -137,7 +147,7 @@ for epoch in range(0, nEpochs):
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(save_dir, modelName+'_epoch-'+str(epoch)+'.pth'))
+        torch.save(net.state_dict(), os.path.join(save_dir, modelName+'_epoch-'+str(epoch+1)+'.pth'))
 
     # One testing epoch
     if useTest and epoch % nTestInterval == (nTestInterval-1):

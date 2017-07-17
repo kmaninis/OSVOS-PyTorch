@@ -1,5 +1,6 @@
 from __future__ import division
 import sys
+sys.path.append("/home/eec/Documents/external/deep_learning/pytorch/build/lib.linux-x86_64-2.7")  # Custom PyTorch
 import numpy as np
 import cv2
 from scipy.misc import imresize
@@ -149,26 +150,37 @@ class DAVISDataset(Dataset):
 class ScaleNRotate(object):
     """Scale (zoom-in, zoom-out) and Rotate the image and the ground truth.
     Args:
-        maxRot (float): maximum rotation angle to be added
-        maxScale (float): maximum scale to be added
+        two possibilities:
+        1.  rots (tuple): (minimum, maximum) rotation angle
+            scales (tuple): (minimum, maximum) scale
+        2.  rots [list]: list of fixed possible rotation angles
+            scales [list]: list of fixed possible scales
     """
     def __init__(self, rots=(-30, 30), scales=(.75, 1.25)):
+        assert (isinstance(rots, type(scales)))
         self.rots = rots
         self.scales = scales
 
     def __call__(self, sample):
 
-        rot = (self.rots[1] - self.rots[0]) * random.random() - \
-              (self.rots[1] - self.rots[0])/2
+        if type(self.rots) == tuple:
+            # Continuous range of scales and rotations
+            rot = (self.rots[1] - self.rots[0]) * random.random() - \
+                  (self.rots[1] - self.rots[0])/2
 
-        sc = (self.scales[1] - self.scales[0]) * random.random() - \
-             (self.scales[1] - self.scales[0]) / 2 + 1
+            sc = (self.scales[1] - self.scales[0]) * random.random() - \
+                 (self.scales[1] - self.scales[0]) / 2 + 1
+        elif type(self.rots) == list:
+            # Fixed range of scales and rotations
+            rot = self.rots[random.randint(0, len(self.rots)-1)]
+            sc = self.scales[random.randint(0, len(self.scales) - 1)]
 
         img, gt = sample['image'], sample['gt']
         h, w = img.shape[:2]
         center = (w / 2, h / 2)
         M = cv2.getRotationMatrix2D(center, rot, sc)
-        img_ = cv2.warpAffine(img, M, (w, h))
+        img_ = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC)
+        plt.imshow(img_)
 
         h_gt, w_gt = gt.shape[:2]
         center_gt = (w_gt / 2, h_gt / 2)
@@ -176,6 +188,27 @@ class ScaleNRotate(object):
         gt_ = cv2.warpAffine(gt, M, (w_gt, h_gt), flags=cv2.INTER_NEAREST)
         gt_ = gt_/np.max([gt_.max(), 1e-8])
 
+        sample['image'], sample['gt'] = img_, gt_
+
+        return sample
+
+
+class Resize(object):
+    """Randomly resize the image and the ground truth to specified scales.
+    Args:
+        scales (list): the list of scales
+    """
+    def __init__(self, scales=[0.5, 0.8, 1]):
+        self.scales = scales
+
+    def __call__(self, sample):
+
+        # Fixed range of scales
+        sc = self.scales[random.randint(0, len(self.scales) - 1)]
+
+        img, gt = sample['image'], sample['gt']
+        img_ = cv2.resize(img, None, fx=sc, fy=sc, interpolation=cv2.INTER_CUBIC)
+        gt_ = cv2.resize(gt, None, fx=sc, fy=sc, interpolation=cv2.INTER_NEAREST)
         sample['image'], sample['gt'] = img_, gt_
 
         return sample
@@ -226,11 +259,12 @@ if __name__ == '__main__':
     from torchvision import transforms
     from matplotlib import pyplot as plt
 
+    # transforms = transforms.Compose([RandomHorizontalFlip(),
+    #                                  ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25))])
     transforms = transforms.Compose([RandomHorizontalFlip(),
-                                     ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25))])
+                                     Resize(scales=[0.5, 0.8, 1])])
 
     db = DAVISDataset(train=True, transform=transforms,
-                      db_root_dir='/home/kmaninis/glusterfs/Databases/Boundary_Detection/DAVIS/',
                       seq_name='blackswan')
 
     sample = db[0]
