@@ -1,31 +1,22 @@
-from abc import ABCMeta, abstractmethod
-
-
 class PathAbstract(object):
-    __metaclass__ = ABCMeta
 
     @staticmethod
-    @abstractmethod
     def db_root_dir():
-        pass
+        raise NotImplementedError
 
     @staticmethod
-    @abstractmethod
     def save_root_dir():
-        pass
+        raise NotImplementedError
 
     @staticmethod
-    @abstractmethod
     def exp_dir():
-        pass
+        raise NotImplementedError
 
     @staticmethod
-    @abstractmethod
     def is_custom_pytorch():
-        pass
+        raise NotImplementedError
 
     @staticmethod
-    @abstractmethod
     def custom_pytorch():
-        pass
+        raise NotImplementedError
 
