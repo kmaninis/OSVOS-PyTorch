@@ -3,3 +3,5 @@
 *.pdf
 models/*
 *.pyc
+path.py
+params.py

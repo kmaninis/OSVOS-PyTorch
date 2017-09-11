@@ -1,7 +1,10 @@
 # Package Includes
 from __future__ import division
 import sys
-sys.path.append("/home/kmaninis/scratch_net/reinhold/Kevis/Software/apps/pytorch/build/lib.linux-x86_64-2.7")  # Custom PyTorch
+from path import Path
+from params import Params
+if Path.is_custom_pytorch():
+    sys.path.append(Path.custom_pytorch())  # Custom PyTorch
 import numpy as np
 import os
 import socket
@@ -28,13 +31,13 @@ if 'SEQ_NAME' not in os.environ.keys():
 else:
     seq_name = str(os.environ['SEQ_NAME'])
 
-db_root_dir = '/home/kmaninis/glusterfs/Databases/Boundary_Detection/DAVIS/'
-save_root_dir = '/scratch_net/reinhold_second/Results/VOSB/DAVIS/OSVOS-PyTorch/'
-exp_dir = '/home/kmaninis/glusterfs/pytorch_experiments/osvos'
+db_root_dir = Path.db_root_dir()
+save_root_dir = Path.save_root_dir()
+exp_dir = Path.exp_dir()
 vis_net = 0  # Visualize the network?
 vis_res = 0  # Visualize the results?
-nAveGrad = 5
-nEpochs = 2000 * nAveGrad  # Number of epochs for training
+nAveGrad = Params.nAveGrad()
+nEpochs = Params.nEpochs() * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
 parentEpoch = 119
 
@@ -71,8 +74,8 @@ if vis_net:
 
 
 # Use the following optimizer
-lr = 1e-8
-wd = 0.0002
+lr = Params.lr()
+wd = Params.wd()
 optimizer = optim.SGD([
     {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
     {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': lr * 2},
