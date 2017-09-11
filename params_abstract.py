@@ -1,6 +1,3 @@
-from abc import ABCMeta, abstractmethod
-
-
 class ParamsAbstract(object):
 
     @staticmethod
