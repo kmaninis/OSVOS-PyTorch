@@ -1,6 +1,10 @@
 from __future__ import division
 import sys
-sys.path.append("/home/eec/Documents/external/deep_learning/pytorch/build/lib.linux-x86_64-2.7")  # Custom PyTorch
+from path import Path
+if Path.is_custom_pytorch():
+    sys.path.append(Path.custom_pytorch())  # Custom PyTorch
+if Path.is_custom_opencv():
+    sys.path.insert(0, Path.custom_opencv())
 import numpy as np
 import cv2
 from scipy.misc import imresize
@@ -69,35 +73,40 @@ class DAVISDataset(Dataset):
         self.seq_name = seq_name
 
         if self.train:
-            fname = 'train'
+            fname = 'train_seqs'
         else:
-            fname = 'val'
+            fname = 'val_seqs'
 
         if self.seq_name is None:
 
             # Initialize the original DAVIS splits for training the parent network
             with open(os.path.join(db_root_dir, fname + '.txt')) as f:
-                names = f.readlines()
-                img_list = ['JPEGImages/480p/' + x.strip() + '.jpg' for x in names]
-                labels = ['Annotations/480p/' + x.strip() + '.png' for x in names]
+                seqs = f.readlines()
+                img_list = []
+                labels = []
+                for seq in seqs:
+                    images = np.sort(os.listdir(os.path.join(db_root_dir, 'JPEGImages/480p/', seq.strip())))
+                    images_path = map(lambda x: os.path.join('JPEGImages/480p/', seq.strip(), x), images)
+                    img_list.extend(images_path)
+                    lab = np.sort(os.listdir(os.path.join(db_root_dir, 'Annotations/480p/', seq.strip())))
+                    lab_path = map(lambda x: os.path.join('Annotations/480p/', seq.strip(), x), lab)
+                    labels.extend(lab_path)
         else:
 
             # Initialize the per sequence images for online training
-            names = np.sort(os.listdir(os.path.join(db_root_dir, 'JPEGImages/480p/', str(seq_name))))
-            img_list = ['JPEGImages/480p/' + str(seq_name) + '/' + os.path.splitext(x)[0] + '.jpg' for x in names]
-            labels = ['Annotations/480p/' + str(seq_name) + '/' + os.path.splitext(x)[0] + '.png' for x in names]
-
+            names_img = np.sort(os.listdir(os.path.join(db_root_dir, 'JPEGImages/480p/', str(seq_name))))
+            img_list = map(lambda x: os.path.join('JPEGImages/480p/', str(seq_name), x), names_img)
+            name_label = np.sort(os.listdir(os.path.join(db_root_dir, 'Annotations/480p/', str(seq_name))))
+            labels = [os.path.join('Annotations/480p/', str(seq_name), name_label[0])]
+            labels.extend([None]*(len(names_img)-1))
             if self.train:
                 img_list = [img_list[0]]
                 labels = [labels[0]]
-            else:
-                img_list = img_list[1:]
-                labels = labels[1:]
 
         assert (len(labels) == len(img_list))
 
-        self.img_list = img_list  # [:1]
-        self.labels = labels  # [:1]
+        self.img_list = img_list
+        self.labels = labels
 
         print('Done initializing ' + fname + ' Dataset')
 
@@ -111,12 +120,10 @@ class DAVISDataset(Dataset):
         sample = {'image': img, 'gt': gt}
 
         if self.seq_name is not None:
-            if not self.train:
-                idx += 1
             fname = os.path.join(self.seq_name, "%05d" % idx)
             sample['fname'] = fname
 
-        if self.transform:
+        if self.transform is not None:
             sample = self.transform(sample)
 
         return sample
