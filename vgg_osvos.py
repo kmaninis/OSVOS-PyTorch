@@ -61,7 +61,8 @@ class OSVOS(nn.Module):
 
         out = torch.cat(side[:], dim=1)
         out = self.fuse(out)
-        return side_out.append(out)
+        side_out.append(out)
+        return side_out
 
     def _initialize_weights(self, pretrained):
         for m in self.modules():

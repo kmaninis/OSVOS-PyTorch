@@ -1,11 +1,15 @@
 # Package Includes
 from __future__ import division
 import sys
-sys.path.append("/home/eec/Documents/external/deep_learning/pytorch/build/lib.linux-x86_64-2.7")  # Custom PyTorch
 import os
 import socket
 import timeit
-
+from path import Path
+from params import Params
+if Path.is_custom_pytorch():
+    sys.path.append(Path.custom_pytorch())  # Custom PyTorch
+if Path.is_custom_opencv():
+    sys.path.insert(0, Path.custom_opencv())
 # Custom includes
 import visualize as viz
 import osvos_toolbox as tb
@@ -19,8 +23,9 @@ import torch.optim as optim
 from torchvision import transforms, utils
 from torch.utils.data import DataLoader
 
+# Select which GPU, -1 if CPU
 if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
-    gpu_id = 1  # Select which GPU, -1 if CPU
+    gpu_id = -1
 else:
     gpu_id = int(os.environ['SGE_GPU'])
 
@@ -35,8 +40,8 @@ nEpochs = 200  # Number of epochs for training
 useTest = 1  # See evolution of the test set when training?
 testBatch = 1  # Testing Batch
 nTestInterval = 20  # Run on test set every nTestInterval epochs
-db_root_dir = '/media/eec/external/Databases/Segmentation/DAVIS/'
-save_dir = '/home/eec/Desktop/pytorch_experiments/osvos/'
+db_root_dir = Path.db_root_dir()
+save_dir = Path.save_root_dir()
 vis_net = 1  # Visualize the network?
 snapshot = 20  # Store a model every snapshot epochs
 nAveGrad = 10
@@ -81,7 +86,7 @@ composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)
-trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=1, num_workers=1)
+trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=1)
 
 # Testing dataset and its iterator
 db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor())
