@@ -65,8 +65,6 @@ writer.add_graph(net, y[-1])
 if vis_net:
     x = torch.randn(1, 3, 480, 854)
     x = Variable(x)
-    if gpu_id >= 0:
-        x = x.cuda()
     y = net.forward(x)
     g = viz.make_dot(y, net.state_dict())
     g.view()

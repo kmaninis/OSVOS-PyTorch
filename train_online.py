@@ -25,6 +25,8 @@ import torch.optim as optim
 from torchvision import transforms, utils
 from torch.utils.data import DataLoader
 
+# Tensorboard include
+from tensorboardX import SummaryWriter
 
 # Setting of parameters
 if 'SEQ_NAME' not in os.environ.keys():
@@ -40,7 +42,7 @@ vis_res = 0  # Visualize the results?
 nAveGrad = Params.nAveGrad()
 nEpochs = Params.nEpochs() * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
-parentEpoch = 119
+parentEpoch = 240
 
 # Parameters in p are used for the name of the model
 p = {
@@ -58,6 +60,11 @@ else:
 net = vo.OSVOS(pretrained=0)
 net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+str(parentEpoch)+'.pth'),
                                map_location=lambda storage, loc: storage))
+
+# Logging into Tensorboard
+writer = SummaryWriter()
+y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
+writer.add_graph(net, y[-1])
 
 if gpu_id >= 0:
     torch.cuda.set_device(device=gpu_id)
@@ -89,7 +96,8 @@ optimizer = optim.SGD([
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
 composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
-                                          tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
+                                          tb.Resize(),
+                                          # tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
@@ -97,7 +105,7 @@ trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num
 
 # Testing dataset and its iterator
 db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
-testloader = DataLoader(db_test, batch_size=1, shuffle=False, num_workers=1)
+testloader = DataLoader(db_test, batch_size=1, shuffle=False, num_workers=2)
 
 
 num_img_tr = len(trainloader)
@@ -133,6 +141,7 @@ for epoch in range(0, nEpochs):
 
             print('[Epoch: %d, numImages: %5d]' % (epoch+1, ii + 1))
             print('Loss: %f' % running_loss_tr)
+            writer.add_scalar('data/total_loss_epoch', running_loss_tr, epoch)
 
         # Backward the averaged gradient
         loss /= nAveGrad
@@ -141,6 +150,7 @@ for epoch in range(0, nEpochs):
 
         # Update the weights once in nAveGrad forward passes
         if aveGrad % nAveGrad == 0:
+            writer.add_scalar('data/total_loss_iter', loss.data[0], ii + num_img_tr * epoch)
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
