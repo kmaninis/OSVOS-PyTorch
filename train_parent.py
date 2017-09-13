@@ -22,6 +22,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 from torchvision import transforms, utils
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import LambdaLR
 
 # Select which GPU, -1 if CPU
 if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
@@ -36,7 +37,7 @@ p = {
     }
 
 # # Setting other parameters
-nEpochs = 200  # Number of epochs for training
+nEpochs = 240  # Number of epochs for training (500.000/2079)
 useTest = 1  # See evolution of the test set when training?
 testBatch = 1  # Testing Batch
 nTestInterval = 20  # Run on test set every nTestInterval epochs
@@ -45,7 +46,9 @@ save_dir = Path.save_root_dir()
 vis_net = 1  # Visualize the network?
 snapshot = 20  # Store a model every snapshot epochs
 nAveGrad = 10
-
+side_supervision = [1]*72
+side_supervision.extend([0.5]*72)
+side_supervision.extend([0]*96)
 
 # Network definition
 net = vo.OSVOS(pretrained=1)
@@ -77,6 +80,16 @@ optimizer = optim.SGD([
     {'params': net.fuse.bias, 'lr': 2*lr/100},
     ], lr=lr, momentum=0.9)
 
+
+def lr_schedule(iteration):
+    if 48 <= iteration < 72 or 120 <= iteration < 144 or 192 <= iteration < 240:
+        return 0.1
+    else:
+        return 1
+# lr_schedule = lambda iter: 0.1 if (48 < x < 72 or 120 < x < 146 or 48 < x < 240) else 1
+
+
+scheduler = LambdaLR(optimizer, lr_schedule)
 
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
@@ -120,11 +133,11 @@ for epoch in range(0, nEpochs):
         outputs = net.forward(inputs)
 
         # Compute the losses, side outputs and fuse
-        losses = [None] * len(outputs)
+        losses = [0] * len(outputs)
         for i in range(0, len(outputs)):
             losses[i] = class_balanced_cross_entropy_loss(outputs[i], gts, size_average=False)
             running_loss_tr[i] += losses[i].data[0]
-        loss = (1 - epoch / nEpochs)*sum(losses[:-1]) + losses[-1]
+        loss = side_supervision[epoch]*sum(losses[:-1]) + losses[-1]
 
         # Print stuff
         if ii % num_img_tr == num_img_tr-1:
@@ -149,6 +162,9 @@ for epoch in range(0, nEpochs):
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
+
+    # Update the learning rate
+    scheduler.step()
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
