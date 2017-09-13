@@ -109,11 +109,11 @@ composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)
-trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=1)
+trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=2)
 
 # Testing dataset and its iterator
 db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor())
-testloader = DataLoader(db_test, batch_size=testBatch, shuffle=False, num_workers=1)
+testloader = DataLoader(db_test, batch_size=testBatch, shuffle=False, num_workers=2)
 
 num_img_tr = len(trainloader)
 num_img_ts = len(testloader)
@@ -193,7 +193,7 @@ for epoch in range(0, nEpochs):
             outputs = net.forward(inputs)
 
             # Compute the losses, side outputs and fuse
-            losses = [None] * len(outputs)
+            losses = [0] * len(outputs)
             for i in range(0, len(outputs)):
                 losses[i] = class_balanced_cross_entropy_loss(outputs[i], gts, size_average=False)
                 running_loss_ts[i] += losses[i].data[0]
