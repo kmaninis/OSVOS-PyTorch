@@ -24,6 +24,9 @@ from torchvision import transforms, utils
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LambdaLR
 
+# Tensorboard include
+from tensorboardX import SummaryWriter
+
 # Select which GPU, -1 if CPU
 if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
     gpu_id = -1
@@ -40,10 +43,10 @@ p = {
 nEpochs = 240  # Number of epochs for training (500.000/2079)
 useTest = 1  # See evolution of the test set when training?
 testBatch = 1  # Testing Batch
-nTestInterval = 20  # Run on test set every nTestInterval epochs
+nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
 save_dir = Path.save_root_dir()
-vis_net = 1  # Visualize the network?
+vis_net = 0  # Visualize the network?
 snapshot = 20  # Store a model every snapshot epochs
 nAveGrad = 10
 side_supervision = [1]*72
@@ -52,9 +55,11 @@ side_supervision.extend([0]*96)
 
 # Network definition
 net = vo.OSVOS(pretrained=1)
-if gpu_id >= 0:
-    torch.cuda.set_device(device=gpu_id)
-    net.cuda()
+
+# Logging into Tensorboard
+writer = SummaryWriter()
+y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
+writer.add_graph(net, y[-1])
 
 # Visualize the network
 if vis_net:
@@ -65,6 +70,10 @@ if vis_net:
     y = net.forward(x)
     g = viz.make_dot(y, net.state_dict())
     g.view()
+
+if gpu_id >= 0:
+    torch.cuda.set_device(device=gpu_id)
+    net.cuda()
 
 # Use the following optimizer
 lr = 1e-8
@@ -83,10 +92,11 @@ optimizer = optim.SGD([
 
 def lr_schedule(iteration):
     if 48 <= iteration < 72 or 120 <= iteration < 144 or 192 <= iteration < 240:
+        print('Learning rate reduced')
         return 0.1
     else:
         return 1
-# lr_schedule = lambda iter: 0.1 if (48 < x < 72 or 120 < x < 146 or 48 < x < 240) else 1
+# lr_schedule = lambda iter: 0.1 if (48 < iter < 72 or 120 < iter < 146 or 48 < iter < 240) else 1
 
 
 scheduler = LambdaLR(optimizer, lr_schedule)
@@ -116,7 +126,6 @@ aveGrad = 0
 modelName = tb.construct_name(p, "OSVOS_parent_exact")
 
 print("Training Network")
-
 # Main Training and Testing Loop
 for epoch in range(0, nEpochs):
     start_time = timeit.default_timer()
@@ -143,7 +152,7 @@ for epoch in range(0, nEpochs):
         if ii % num_img_tr == num_img_tr-1:
             running_loss_tr = [x / num_img_tr for x in running_loss_tr]
             loss_tr.append(running_loss_tr[-1])
-
+            writer.add_scalar('data/total_loss_epoch', running_loss_tr[-1], epoch)
             print('[Epoch: %d, numImages: %5d]' % (epoch+1, ii + 1))
             for l in range(0, len(running_loss_tr)):
                 print('Loss %d: %f' % (l, running_loss_tr[l]))
@@ -159,6 +168,7 @@ for epoch in range(0, nEpochs):
 
         # Update the weights once in nAveGrad forward passes
         if aveGrad % nAveGrad == 0:
+            writer.add_scalar('data/total_loss_iter', loss.data[0], ii+num_img_tr*epoch)
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
@@ -187,7 +197,7 @@ for epoch in range(0, nEpochs):
             for i in range(0, len(outputs)):
                 losses[i] = class_balanced_cross_entropy_loss(outputs[i], gts, size_average=False)
                 running_loss_ts[i] += losses[i].data[0]
-            loss = (1 - epoch / nEpochs) * sum(losses[:-1]) + losses[-1]
+            loss = side_supervision[epoch] * sum(losses[:-1]) + losses[-1]
 
             # Print stuff
             if ii % num_img_ts == num_img_ts-1:
@@ -195,6 +205,9 @@ for epoch in range(0, nEpochs):
                 loss_ts.append(running_loss_ts[-1])
 
                 print('[Epoch: %d, numImages: %5d]' % (epoch + 1, ii + 1))
+                writer.add_scalar('data/test_loss_epoch', running_loss_ts[-1], epoch)
                 for l in range(0, len(running_loss_ts)):
                     print('***Testing *** Loss %d: %f' % (l, running_loss_ts[l]))
                     running_loss_ts[l] = 0
+
+writer.close()
