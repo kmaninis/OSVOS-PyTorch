@@ -49,8 +49,7 @@ p = {
     'trainBatch': 1,  # Number of Images in each mini-batch
     }
 
-parentModelName = tb.construct_name(p, 'OSVOS_parent')
-
+parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
 if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
     gpu_id = -1  # Select which GPU, -1 if CPU
 else:
@@ -157,7 +156,7 @@ for epoch in range(0, nEpochs):
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(exp_dir, seq_name + '_epoch-'+str(epoch+1) + '.pth'))
+        torch.save(net.state_dict(), os.path.join(exp_dir, 'models', seq_name + '_epoch-'+str(epoch+1) + '.pth'))
 
 stop_time = timeit.default_timer()
 print('Online training time: ' + str(stop_time - start_time))
@@ -170,7 +169,7 @@ if vis_res:
     plt.ion()
     f, ax_arr = plt.subplots(1, 3)
 
-save_dir = os.path.join(save_root_dir, seq_name)
+save_dir = os.path.join(save_root_dir, 'OSVOS_online', seq_name)
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
@@ -191,14 +190,14 @@ for ii, sample_batched in enumerate(testloader):
         pred = np.transpose(outputs[-1].cpu().data.numpy()[jj, :, :, :], (1, 2, 0))
         pred = 1 / (1 + np.exp(-pred))
         pred = np.squeeze(pred)
-        img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
-        gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
-        gt_ = np.squeeze(gt)
 
         # Save the result, attention to the index jj
         sm.imsave(os.path.join(save_dir, os.path.basename(fname[jj]) + '.png'), pred)
 
         if vis_res:
+            img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
+            gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
+            gt_ = np.squeeze(gt)
             # Plot the particular example
             ax_arr[0].cla()
             ax_arr[1].cla()
