@@ -27,3 +27,7 @@ class PathAbstract(object):
     @staticmethod
     def custom_opencv():
         raise NotImplementedError
+
+    @staticmethod
+    def matlab_code():
+        raise NotImplementedError

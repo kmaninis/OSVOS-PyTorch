@@ -254,6 +254,7 @@ for seq_name in seqs:
             # Save the result, attention to the index jj
             sm.imsave(os.path.join(save_dir, os.path.basename(fname[jj]) + '.png'), pred)
 save_dir = os.path.join(Path.save_root_dir(), parentModelName)
-eng = matlab.engine.start_matlab('-nodesktop -nodisplay -nosplash -nojvm -r "cd /home/csergi/scratch/matlab/video_object_seg;run initialization.m"')
+eng = matlab.engine.start_matlab('-nodesktop -nodisplay -nosplash -nojvm -r '
+                                 '"cd {};run initialization.m"'.format(Path.matlab_code()))
 eng.sweep_threshold(save_dir, 'DAVIS', 'val', 200, 0)
 eng.quit()
