@@ -133,18 +133,23 @@ class DAVISDataset(Dataset):
         Make the image-ground-truth pair
         """
         img = cv2.imread(os.path.join(self.db_root_dir, self.img_list[idx]))
-        label = cv2.imread(os.path.join(self.db_root_dir, self.labels[idx]), 0)
+        if self.labels[idx] is not None:
+            label = cv2.imread(os.path.join(self.db_root_dir, self.labels[idx]), 0)
+        else:
+            gt = np.zeros(img.shape[:-1], dtype=np.uint8)
 
         if self.inputRes is not None:
             # inputRes = list(reversed(self.inputRes))
             img = imresize(img, self.inputRes)
-            label = imresize(label, self.inputRes, interp='nearest')
+            if self.labels[idx] is not None:
+                label = imresize(label, self.inputRes, interp='nearest')
 
         img = np.array(img, dtype=np.float32)
         img = np.subtract(img, np.array(self.meanval, dtype=np.float32))
 
-        gt = np.array(label, dtype=np.float32)
-        gt = gt/np.max([gt.max(), 1e-8])
+        if self.labels[idx] is not None:
+                gt = np.array(label, dtype=np.float32)
+                gt = gt/np.max([gt.max(), 1e-8])
 
         return img, gt
 
