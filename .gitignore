@@ -2,6 +2,10 @@
 *.gv
 *.pdf
 models/*
+runs/*
+*.pth
 *.pyc
 path.py
 params.py
+*.mat
+*.txt

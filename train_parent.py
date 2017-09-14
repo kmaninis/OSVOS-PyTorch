@@ -15,6 +15,9 @@ import visualize as viz
 import osvos_toolbox as tb
 import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
+import numpy as np
+import scipy.misc as sm
+import matlab.engine
 
 # PyTorch includes
 import torch
@@ -49,9 +52,9 @@ save_dir = Path.save_root_dir()
 vis_net = 0  # Visualize the network?
 snapshot = 20  # Store a model every snapshot epochs
 nAveGrad = 10
-side_supervision = [1]*72
+side_supervision = [1.0]*72
 side_supervision.extend([0.5]*72)
-side_supervision.extend([0]*96)
+side_supervision.extend([0.0]*96)
 
 # Network definition
 net = vo.OSVOS(pretrained=1)
@@ -176,7 +179,7 @@ for epoch in range(0, nEpochs):
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(save_dir, modelName+'_epoch-'+str(epoch+1)+'.pth'))
+        torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName+'_epoch-'+str(epoch+1)+'.pth'))
 
     # One testing epoch
     if useTest and epoch % nTestInterval == (nTestInterval-1):
@@ -209,3 +212,48 @@ for epoch in range(0, nEpochs):
                     running_loss_ts[l] = 0
 
 writer.close()
+
+# Test parent network
+net = vo.OSVOS(pretrained=0)
+parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
+net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+str(nEpochs)+'.pth'),
+                               map_location=lambda storage, loc: storage))
+with open(os.path.join(Path.db_root_dir(), 'val_seqs.txt'), 'r') as f:
+    seqs = f.readlines()
+seqs = map(lambda seq: seq.strip(), seqs)
+for seq_name in seqs:
+    # Testing dataset and its iterator
+    db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
+    testloader = DataLoader(db_test, batch_size=1, shuffle=False, num_workers=2)
+
+    save_dir = os.path.join(Path.save_root_dir(), parentModelName, seq_name)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    print('Testing Network')
+    # Main Testing Loop
+    for ii, sample_batched in enumerate(testloader):
+
+        img, gt, fname = sample_batched['image'], sample_batched['gt'], sample_batched['fname']
+
+        # Forward of the mini-batch
+        inputs, gts = Variable(img, volatile=True), Variable(gt, volatile=True)
+        if gpu_id >= 0:
+            inputs, gts = inputs.cuda(), gts.cuda()
+
+        outputs = net.forward(inputs)
+
+        for jj in range(int(inputs.size()[0])):
+            pred = np.transpose(outputs[-1].cpu().data.numpy()[jj, :, :, :], (1, 2, 0))
+            pred = 1 / (1 + np.exp(-pred))
+            pred = np.squeeze(pred)
+            img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
+            gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
+            gt_ = np.squeeze(gt)
+
+            # Save the result, attention to the index jj
+            sm.imsave(os.path.join(save_dir, os.path.basename(fname[jj]) + '.png'), pred)
+save_dir = os.path.join(Path.save_root_dir(), parentModelName)
+eng = matlab.engine.start_matlab('-nodesktop -nodisplay -nosplash -nojvm -r "cd /home/csergi/scratch/matlab/video_object_seg;run initialization.m"')
+eng.sweep_threshold(save_dir, 'DAVIS', 'val', 200, 0)
+eng.quit()
