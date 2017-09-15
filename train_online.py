@@ -61,7 +61,7 @@ net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+
                                map_location=lambda storage, loc: storage))
 
 # Logging into Tensorboard
-writer = SummaryWriter()
+writer = SummaryWriter(comment='-'+seq_name)
 y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
 writer.add_graph(net, y[-1])
 

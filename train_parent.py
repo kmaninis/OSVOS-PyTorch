@@ -60,7 +60,7 @@ side_supervision.extend([0.0]*96)
 net = vo.OSVOS(pretrained=1)
 
 # Logging into Tensorboard
-writer = SummaryWriter()
+writer = SummaryWriter(comment='-paren')
 y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
 writer.add_graph(net, y[-1])
 
