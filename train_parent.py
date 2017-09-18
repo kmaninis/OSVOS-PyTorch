@@ -60,7 +60,7 @@ side_supervision.extend([0.0]*96)
 net = vo.OSVOS(pretrained=1)
 
 # Logging into Tensorboard
-writer = SummaryWriter(comment='-paren')
+writer = SummaryWriter(comment='-parent')
 y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
 writer.add_graph(net, y[-1])
 
@@ -91,8 +91,9 @@ optimizer = optim.SGD([
     ], lr=lr, momentum=0.9)
 
 
-def lr_schedule(iteration):
-    if 48 <= iteration < 72 or 120 <= iteration < 144 or 192 <= iteration < 240:
+def lr_schedule(epoch):
+    print('Epoch {}'.format(epoch))
+    if 48 <= epoch < 72 or 120 <= epoch < 144 or 192 <= epoch < 240:
         print('Learning rate reduced')
         return 0.1
     else:
@@ -154,7 +155,7 @@ for epoch in range(0, nEpochs):
             running_loss_tr = [x / num_img_tr for x in running_loss_tr]
             loss_tr.append(running_loss_tr[-1])
             writer.add_scalar('data/total_loss_epoch', running_loss_tr[-1], epoch)
-            print('[Epoch: %d, numImages: %5d]' % (epoch+1, ii + 1))
+            print('[Epoch: %d, numImages: %5d]' % (epoch, ii + 1))
             for l in range(0, len(running_loss_tr)):
                 print('Loss %d: %f' % (l, running_loss_tr[l]))
                 running_loss_tr[l] = 0
@@ -179,7 +180,7 @@ for epoch in range(0, nEpochs):
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName+'_epoch-'+str(epoch+1)+'.pth'))
+        torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName+'_epoch-'+str(epoch)+'.pth'))
 
     # One testing epoch
     if useTest and epoch % nTestInterval == (nTestInterval-1):
@@ -205,7 +206,7 @@ for epoch in range(0, nEpochs):
                 running_loss_ts = [x / num_img_ts for x in running_loss_ts]
                 loss_ts.append(running_loss_ts[-1])
 
-                print('[Epoch: %d, numImages: %5d]' % (epoch + 1, ii + 1))
+                print('[Epoch: %d, numImages: %5d]' % (epoch, ii + 1))
                 writer.add_scalar('data/test_loss_epoch', running_loss_ts[-1], epoch)
                 for l in range(0, len(running_loss_ts)):
                     print('***Testing *** Loss %d: %f' % (l, running_loss_ts[l]))
