@@ -44,7 +44,7 @@ p = {
 
 # # Setting other parameters
 nEpochs = 240  # Number of epochs for training (500.000/2079)
-useTest = 1  # See evolution of the test set when training?
+useTest = 0  # See evolution of the test set when training?
 testBatch = 1  # Testing Batch
 nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
@@ -92,11 +92,12 @@ optimizer = optim.SGD([
 
 
 def lr_schedule(epoch):
-    print('Epoch {}'.format(epoch))
+    print('Scheduler epoch {}'.format(epoch))
     if 48 <= epoch < 72 or 120 <= epoch < 144 or 192 <= epoch < 240:
         print('Learning rate reduced')
         return 0.1
     else:
+        print('Normal learning rate')
         return 1
 # lr_schedule = lambda iter: 0.1 if (48 < iter < 72 or 120 < iter < 146 or 48 < iter < 240) else 1
 
@@ -132,6 +133,10 @@ print("Training Network")
 for epoch in range(0, nEpochs):
     start_time = timeit.default_timer()
     # One training epoch
+    print("Epoch {}".format(epoch))
+    print("Side supervision {}".format(side_supervision[epoch]))
+    # Adjust the learning rate
+    scheduler.step()
     for ii, sample_batched in enumerate(trainloader):
 
         inputs, gts = sample_batched['image'], sample_batched['gt']
@@ -149,6 +154,7 @@ for epoch in range(0, nEpochs):
             losses[i] = class_balanced_cross_entropy_loss(outputs[i], gts, size_average=False)
             running_loss_tr[i] += losses[i].data[0]
         loss = side_supervision[epoch]*sum(losses[:-1]) + losses[-1]
+
 
         # Print stuff
         if ii % num_img_tr == num_img_tr-1:
@@ -171,16 +177,16 @@ for epoch in range(0, nEpochs):
         # Update the weights once in nAveGrad forward passes
         if aveGrad % nAveGrad == 0:
             writer.add_scalar('data/total_loss_iter', loss.data[0], ii+num_img_tr*epoch)
+
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
+        if ii == 10:
+            break
 
-    # Update the learning rate
-    scheduler.step()
-
-    # Save the model
-    if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName+'_epoch-'+str(epoch)+'.pth'))
+    # # Save the model
+    # if (epoch % snapshot) == snapshot - 1 and epoch != 0:
+    #     torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName+'_epoch-'+str(epoch)+'.pth'))
 
     # One testing epoch
     if useTest and epoch % nTestInterval == (nTestInterval-1):
