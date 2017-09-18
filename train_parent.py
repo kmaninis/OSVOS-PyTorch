@@ -131,6 +131,9 @@ print("Training Network")
 # Main Training and Testing Loop
 for epoch in range(0, nEpochs):
     start_time = timeit.default_timer()
+    # Adjust the learning rate
+    scheduler.step()
+
     # One training epoch
     for ii, sample_batched in enumerate(trainloader):
 
@@ -174,9 +177,6 @@ for epoch in range(0, nEpochs):
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
-
-    # Update the learning rate
-    scheduler.step()
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
