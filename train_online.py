@@ -1,8 +1,7 @@
 # Package Includes
 from __future__ import division
 import sys
-from path import Path
-from params import Params
+from mypath import Path
 if Path.is_custom_pytorch():
     sys.path.append(Path.custom_pytorch())  # Custom PyTorch
 
@@ -51,7 +50,7 @@ p = {
 
 parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
 if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
-    gpu_id = -1  # Select which GPU, -1 if CPU
+    gpu_id = 1  # Select which GPU, -1 if CPU
 else:
     gpu_id = int(os.environ['SGE_GPU'])
 

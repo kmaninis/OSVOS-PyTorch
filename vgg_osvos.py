@@ -5,6 +5,7 @@ import math
 from copy import deepcopy
 from custom_layers import center_crop
 import torch.nn.modules as modules
+import numpy as np
 
 
 class OSVOS(nn.Module):
@@ -22,6 +23,7 @@ class OSVOS(nn.Module):
         side_prep = modules.ModuleList()
         score_dsn = modules.ModuleList()
         upscale = modules.ModuleList()
+        upscale_ = modules.ModuleList()
 
         # Construct the network
         for i in range(0, len(lay_list)):
@@ -35,9 +37,12 @@ class OSVOS(nn.Module):
 
                 # Make the layers of the score_dsn step
                 score_dsn.append(nn.Conv2d(16, 1, kernel_size=1, padding=0))
-                upscale.append(nn.Upsample(scale_factor=2 ** i, mode='bilinear'))
+                # upscale.append(nn.Upsample(scale_factor=2 ** i, mode='bilinear'))
+                upscale_.append(nn.ConvTranspose2d(1, 1, kernel_size=2 ** (1 + i), stride=2 ** i, bias=False))
+                upscale.append(nn.ConvTranspose2d(16, 16, kernel_size=2 ** (1 + i), stride=2 ** i, bias=False))
 
         self.upscale = upscale
+        self.upscale_ = upscale_
         self.stages = stages
         self.side_prep = side_prep
         self.score_dsn = score_dsn
@@ -48,7 +53,7 @@ class OSVOS(nn.Module):
         self._initialize_weights(pretrained)
 
     def forward(self, x):
-        crop_h, crop_w = int(x.size()[2]), int(x.size()[3])
+        crop_h, crop_w = int(x.size()[-2]), int(x.size()[-1])
         x = self.stages[0](x)
 
         side = []
@@ -57,7 +62,7 @@ class OSVOS(nn.Module):
             x = self.stages[i](x)
             side_temp = self.side_prep[i - 1](x)
             side.append(center_crop(self.upscale[i - 1](side_temp), crop_h, crop_w))
-            side_out.append(center_crop(self.upscale[i - 1](self.score_dsn[i - 1](side_temp)), crop_h, crop_w))
+            side_out.append(center_crop(self.upscale_[i - 1](self.score_dsn[i - 1](side_temp)), crop_h, crop_w))
 
         out = torch.cat(side[:], dim=1)
         out = self.fuse(out)
@@ -76,6 +81,9 @@ class OSVOS(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
+            elif isinstance(m, nn.ConvTranspose2d):
+                m.weight.data.zero_()
+                m.weight.data = interp_surgery(m)
 
         if pretrained:
             vgg_structure = [64, 64, 'M', 128, 128, 'M', 256, 256, 256,
@@ -97,6 +105,35 @@ class OSVOS(nn.Module):
                         self.stages[i][j].weight = deepcopy(_vgg.features[inds[k]].weight)
                         self.stages[i][j].bias = deepcopy(_vgg.features[inds[k]].bias)
                         k += 1
+
+
+def upsample_filt(size):
+    factor = (size + 1) // 2
+    if size % 2 == 1:
+        center = factor - 1
+    else:
+        center = factor - 0.5
+    og = np.ogrid[:size, :size]
+    return (1 - abs(og[0] - center) / factor) * \
+           (1 - abs(og[1] - center) / factor)
+
+
+# set parameters s.t. deconvolutional layers compute bilinear interpolation
+# this is for deconvolution without groups
+def interp_surgery(lay):
+        m, k, h, w = lay.weight.data.size()
+        if m != k:
+            print 'input + output channels need to be the same'
+            raise
+        if h != w:
+            print 'filters need to be square'
+            raise
+        filt = upsample_filt(h)
+
+        for i in range(m):
+            lay.weight[i, i, :, :].data.copy_(torch.from_numpy(filt))
+
+        return lay.weight.data
 
 
 def find_conv_layers(_vgg):

@@ -1,11 +1,11 @@
 # Package Includes
 from __future__ import division
+# import matlab.engine
 import sys
 import os
 import socket
 import timeit
-from path import Path
-from params import Params
+from mypath import Path
 if Path.is_custom_pytorch():
     sys.path.append(Path.custom_pytorch())  # Custom PyTorch
 if Path.is_custom_opencv():
@@ -17,7 +17,7 @@ import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
 import numpy as np
 import scipy.misc as sm
-import matlab.engine
+
 
 # PyTorch includes
 import torch
@@ -32,7 +32,7 @@ from tensorboardX import SummaryWriter
 
 # Select which GPU, -1 if CPU
 if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
-    gpu_id = -1
+    gpu_id = 1
 else:
     gpu_id = int(os.environ['SGE_GPU'])
 
@@ -254,8 +254,8 @@ for seq_name in seqs:
 
             # Save the result, attention to the index jj
             sm.imsave(os.path.join(save_dir, os.path.basename(fname[jj]) + '.png'), pred)
-save_dir = os.path.join(Path.save_root_dir(), parentModelName)
-eng = matlab.engine.start_matlab('-nodesktop -nodisplay -nosplash -nojvm -r '
-                                 '"cd {};run initialization.m"'.format(Path.matlab_code()))
-eng.sweep_threshold(save_dir, 'DAVIS', 'val', 200, 0)
-eng.quit()
+# save_dir = os.path.join(Path.save_root_dir(), parentModelName)
+# eng = matlab.engine.start_matlab('-nodesktop -nodisplay -nosplash -nojvm -r '
+#                                  '"cd {};run initialization.m"'.format(Path.matlab_code()))
+# eng.sweep_threshold(save_dir, 'DAVIS', 'val', 200, 0)
+# eng.quit()
