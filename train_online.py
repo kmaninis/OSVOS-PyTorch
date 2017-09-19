@@ -99,7 +99,7 @@ composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
                                           # tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
                                           tb.ToTensor()])
 # Training dataset and its iterator
-db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
+db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
 trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=2)
 
 # Testing dataset and its iterator
@@ -143,7 +143,7 @@ for epoch in range(0, nEpochs):
             writer.add_scalar('data/total_loss_epoch', running_loss_tr, epoch)
 
         # Backward the averaged gradient
-        loss /= nAveGrad
+        loss /= 2
         loss.backward()
         aveGrad += 1
 

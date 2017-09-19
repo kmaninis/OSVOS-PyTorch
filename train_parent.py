@@ -170,7 +170,7 @@ for epoch in range(0, nEpochs):
             print("Execution time: " + str(stop_time - start_time))
 
         # Backward the averaged gradient
-        loss /= nAveGrad
+        loss += loss
         loss.backward()
         aveGrad += 1
 
