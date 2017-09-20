@@ -6,6 +6,7 @@ import os
 import socket
 import timeit
 from mypath import Path
+
 if Path.is_custom_pytorch():
     sys.path.append(Path.custom_pytorch())  # Custom PyTorch
 if Path.is_custom_opencv():
@@ -17,7 +18,6 @@ import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
 import numpy as np
 import scipy.misc as sm
-
 
 # PyTorch includes
 import torch
@@ -31,16 +31,20 @@ from torch.optim.lr_scheduler import LambdaLR
 from tensorboardX import SummaryWriter
 
 # Select which GPU, -1 if CPU
-if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
+if socket.gethostname() == 'eec':
     gpu_id = 1
+elif 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
+    gpu_id = -1
 else:
     gpu_id = int(os.environ['SGE_GPU'])
+
+print('Using GPU: {} '.format(gpu_id))
 
 # Setting of parameters
 # Parameters in p are used for the name of the model
 p = {
     'trainBatch': 1,  # Number of Images in each mini-batch
-    }
+}
 
 # # Setting other parameters
 nEpochs = 240  # Number of epochs for training (500.000/2079)
@@ -50,16 +54,26 @@ nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
 save_dir = Path.save_root_dir()
 if not os.path.exists(save_dir):
-    os.makedirs(save_dir)
+    os.makedirs(os.path.join(save_dir, 'models'))
 vis_net = 0  # Visualize the network?
 snapshot = 20  # Store a model every snapshot epochs
 nAveGrad = 10
-side_supervision = [1.0]*72
-side_supervision.extend([0.5]*72)
-side_supervision.extend([0.0]*96)
+side_supervision = [1.0] * 72
+side_supervision.extend([0.5] * 72)
+side_supervision.extend([0.0] * 96)
+resume_epoch = 20  # Default is 0, change if want to resume
 
 # Network definition
-net = vo.OSVOS(pretrained=1)
+modelName = tb.construct_name(p, "OSVOS_parent_exact")
+if resume_epoch == 0:
+    net = vo.OSVOS(pretrained=1)
+else:
+    net = vo.OSVOS(pretrained=0)
+    print("Updating weights from: {}".format(
+        os.path.join(save_dir, 'models', modelName + '_epoch-' + str(resume_epoch - 1) + '.pth')))
+    net.load_state_dict(
+        torch.load(os.path.join(save_dir, 'models', modelName + '_epoch-' + str(resume_epoch - 1) + '.pth'),
+                   map_location=lambda storage, loc: storage))
 
 # Logging into Tensorboard
 writer = SummaryWriter(comment='-parent')
@@ -82,17 +96,22 @@ if gpu_id >= 0:
 lr = 1e-8
 wd = 0.0002
 optimizer = optim.SGD([
-    {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
-    {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': lr * 2},
-    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
-    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'bias' in pr[0]], 'lr': lr*2},
-    {'params': [pr[1] for pr in net.score_dsn.named_parameters() if 'weight' in pr[0]], 'lr': lr/10, 'weight_decay': wd},
-    {'params': [pr[1] for pr in net.score_dsn.named_parameters() if 'bias' in pr[0]], 'lr': 2*lr/10},
-    {'params': [pr[1] for pr in net.upscale.named_parameters() if 'weight' in pr[0]], 'lr': 0},
-    {'params': [pr[1] for pr in net.upscale_.named_parameters() if 'weight' in pr[0]], 'lr': 0},
-    {'params': net.fuse.weight, 'lr': lr/100, 'weight_decay': wd},
-    {'params': net.fuse.bias, 'lr': 2*lr/100},
-    ], lr=lr, momentum=0.9)
+    {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd,
+     'initial_lr': lr},
+    {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': 2 * lr, 'initial_lr': 2 * lr},
+    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd,
+     'initial_lr': lr},
+    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'bias' in pr[0]], 'lr': 2 * lr,
+     'initial_lr': 2 * lr},
+    {'params': [pr[1] for pr in net.score_dsn.named_parameters() if 'weight' in pr[0]], 'lr': lr / 10,
+     'weight_decay': wd, 'initial_lr': lr / 10},
+    {'params': [pr[1] for pr in net.score_dsn.named_parameters() if 'bias' in pr[0]], 'lr': 2 * lr / 10,
+     'initial_lr': 2 * lr / 10},
+    {'params': [pr[1] for pr in net.upscale.named_parameters() if 'weight' in pr[0]], 'lr': 0, 'initial_lr': 0},
+    {'params': [pr[1] for pr in net.upscale_.named_parameters() if 'weight' in pr[0]], 'lr': 0, 'initial_lr': 0},
+    {'params': net.fuse.weight, 'lr': lr / 100, 'initial_lr': lr / 100, 'weight_decay': wd},
+    {'params': net.fuse.bias, 'lr': 2 * lr / 100, 'initial_lr': 2 * lr / 100},
+], lr=lr, momentum=0.9)
 
 
 def lr_schedule(epoch):
@@ -102,16 +121,18 @@ def lr_schedule(epoch):
         return 0.1
     else:
         return 1
+
+
 # lr_schedule = lambda iter: 0.1 if (48 < iter < 72 or 120 < iter < 146 or 48 < iter < 240) else 1
 
 
-scheduler = LambdaLR(optimizer, lr_schedule)
+scheduler = LambdaLR(optimizer, lr_schedule, last_epoch=resume_epoch - 1)
 
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
 composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
                                           tb.Resize(),
-                                        # tb.ScaleNRotate(rots=[0], scales=[0.5, 0.8, 1]),
+                                          # tb.ScaleNRotate(rots=[0], scales=[0.5, 0.8, 1]),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)
@@ -129,11 +150,9 @@ loss_tr = []
 loss_ts = []
 aveGrad = 0
 
-modelName = tb.construct_name(p, "OSVOS_parent_exact")
-
 print("Training Network")
 # Main Training and Testing Loop
-for epoch in range(0, nEpochs):
+for epoch in range(resume_epoch, nEpochs):
     start_time = timeit.default_timer()
     # Adjust the learning rate
     scheduler.step()
@@ -155,10 +174,10 @@ for epoch in range(0, nEpochs):
         for i in range(0, len(outputs)):
             losses[i] = class_balanced_cross_entropy_loss(outputs[i], gts, size_average=False)
             running_loss_tr[i] += losses[i].data[0]
-        loss = side_supervision[epoch]*sum(losses[:-1]) + losses[-1]
+        loss = side_supervision[epoch] * sum(losses[:-1]) + losses[-1]
 
         # Print stuff
-        if ii % num_img_tr == num_img_tr-1:
+        if ii % num_img_tr == num_img_tr - 1:
             running_loss_tr = [x / num_img_tr for x in running_loss_tr]
             loss_tr.append(running_loss_tr[-1])
             writer.add_scalar('data/total_loss_epoch', running_loss_tr[-1], epoch)
@@ -177,17 +196,17 @@ for epoch in range(0, nEpochs):
 
         # Update the weights once in nAveGrad forward passes
         if aveGrad % nAveGrad == 0:
-            writer.add_scalar('data/total_loss_iter', loss.data[0], ii+num_img_tr*epoch)
+            writer.add_scalar('data/total_loss_iter', loss.data[0], ii + num_img_tr * epoch)
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName+'_epoch-'+str(epoch)+'.pth'))
+        torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName + '_epoch-' + str(epoch) + '.pth'))
 
     # One testing epoch
-    if useTest and epoch % nTestInterval == (nTestInterval-1):
+    if useTest and epoch % nTestInterval == (nTestInterval - 1):
         for ii, sample_batched in enumerate(testloader):
             inputs, gts = sample_batched['image'], sample_batched['gt']
 
@@ -206,7 +225,7 @@ for epoch in range(0, nEpochs):
             loss = side_supervision[epoch] * sum(losses[:-1]) + losses[-1]
 
             # Print stuff
-            if ii % num_img_ts == num_img_ts-1:
+            if ii % num_img_ts == num_img_ts - 1:
                 running_loss_ts = [x / num_img_ts for x in running_loss_ts]
                 loss_ts.append(running_loss_ts[-1])
 
@@ -221,7 +240,7 @@ writer.close()
 # Test parent network
 net = vo.OSVOS(pretrained=0)
 parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
-net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+str(nEpochs)+'.pth'),
+net.load_state_dict(torch.load(os.path.join('models', parentModelName + '_epoch-' + str(nEpochs) + '.pth'),
                                map_location=lambda storage, loc: storage))
 with open(os.path.join(Path.db_root_dir(), 'val_seqs.txt'), 'r') as f:
     seqs = f.readlines()
