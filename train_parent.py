@@ -57,18 +57,19 @@ save_dir = Path.save_root_dir()
 if not os.path.exists(save_dir):
     os.makedirs(os.path.join(save_dir, 'models'))
 vis_net = 0  # Visualize the network?
-snapshot = 20  # Store a model every snapshot epochs
+snapshot = 0  # Store a model every snapshot epochs
 nAveGrad = 10
 side_supervision = [1.0] * 72
 side_supervision.extend([0.5] * 72)
 side_supervision.extend([0.0] * 96)
-load_caffe_vgg = 0
-resume_epoch = 20  # Default is 0, change if want to resume
+load_caffe_vgg = 1
+resume_epoch = 0  # Default is 0, change if want to resume
 
 # Network definition
 modelName = tb.construct_name(p, "OSVOS_parent_exact")
 if resume_epoch == 0:
     net = vo.OSVOS(pretrained=1)
+    # TODO: Port it to .pth
     if load_caffe_vgg:
         # Load weights from Caffe
         caffe_weights = scipy.io.loadmat('models/vgg_hed_caffe.mat')
