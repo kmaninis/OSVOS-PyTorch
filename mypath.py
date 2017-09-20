@@ -8,11 +8,11 @@ class Path(PathAbstract):
 
     @staticmethod
     def save_root_dir():
-        return '/home/eec/Desktop/pytorch_experiments/osvos/'
+        return '/home/eec/Desktop/pytorch_experiments/osvos/deconv'
 
     @staticmethod
     def exp_dir():
-        return '/home/eec/Desktop/pytorch_experiments/osvos/'
+        return '/home/eec/Desktop/pytorch_experiments/osvos/deconv'
 
     @staticmethod
     def is_custom_pytorch():

@@ -50,7 +50,7 @@ nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
 save_dir = Path.save_root_dir()
 if not os.path.exists(save_dir):
-    os.makedirs(save_dir)
+    os.makedirs(save_dir, 'models')
 vis_net = 0  # Visualize the network?
 snapshot = 20  # Store a model every snapshot epochs
 nAveGrad = 10
