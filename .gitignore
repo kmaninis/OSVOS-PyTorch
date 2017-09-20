@@ -5,7 +5,7 @@ models/*
 runs/*
 *.pth
 *.pyc
-path.py
+mypath.py
 mypath.py
 params.py
 *.mat

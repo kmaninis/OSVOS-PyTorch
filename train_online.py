@@ -16,6 +16,7 @@ import visualize as viz
 import osvos_toolbox as tb
 import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
+import scipy.io
 
 # PyTorch includes
 import torch
@@ -29,7 +30,7 @@ from tensorboardX import SummaryWriter
 
 # Setting of parameters
 if 'SEQ_NAME' not in os.environ.keys():
-    seq_name = 'blackswan'
+    seq_name = 'drift-chicane'
 else:
     seq_name = str(os.environ['SEQ_NAME'])
 
@@ -38,8 +39,8 @@ save_root_dir = Path.save_root_dir()
 exp_dir = Path.exp_dir()
 vis_net = 0  # Visualize the network?
 vis_res = 0  # Visualize the results?
-nAveGrad = Params.nAveGrad()
-nEpochs = Params.nEpochs() * nAveGrad  # Number of epochs for training
+nAveGrad = 5
+nEpochs = 2000 * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
 parentEpoch = 240
 
@@ -56,9 +57,46 @@ else:
 
 # Network definition
 net = vo.OSVOS(pretrained=0)
-net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+str(parentEpoch)+'.pth'),
-                               map_location=lambda storage, loc: storage))
+# net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+str(parentEpoch)+'.pth'),
+#                                map_location=lambda storage, loc: storage))
 
+# Load weights from Caffe
+caffe_weights = scipy.io.loadmat('/home/csergi/scratch/caffe_versions/OSVOS-caffe/parent_network_weights.mat')
+caffe_forward = scipy.io.loadmat('/home/csergi/scratch/caffe_versions/OSVOS-caffe/drift-chicane_forward.mat')
+# Core network
+caffe_ind = 0
+for ind, layer in enumerate(net.stages.parameters()):
+    if ind % 2 == 0:
+        c_w = torch.from_numpy(caffe_weights['valueSet_w'][0][caffe_ind].transpose())
+        assert(layer.data.shape == c_w.shape)
+        layer.data = c_w
+    else:
+        c_b = torch.from_numpy(caffe_weights['valueSet_b'][0][caffe_ind][:, 0])
+        assert (layer.data.shape == c_b.shape)
+        layer.data = c_b
+        caffe_ind+=1
+# 16 channel conversion
+for ind, layer in enumerate(net.side_prep.parameters()):
+    if ind % 2 == 0:
+        c_w = torch.from_numpy(caffe_weights['valueSet_w'][0][caffe_ind].transpose())
+        assert(layer.data.shape == c_w.shape)
+        layer.data = c_w
+    else:
+        c_b = torch.from_numpy(caffe_weights['valueSet_b'][0][caffe_ind][:, 0])
+        assert (layer.data.shape == c_b.shape)
+        layer.data = c_b
+        caffe_ind+=1
+
+for ind, layer in enumerate(net.fuse.parameters()):
+    if ind % 2 == 0:
+        c_w = torch.from_numpy(caffe_weights['valueSet_w'][0][-1].transpose())
+        c_w = c_w.unsqueeze(0)
+        assert (layer.data.shape == c_w.shape)
+        layer.data = c_w
+    else:
+        c_b = torch.from_numpy(caffe_weights['valueSet_b'][0][-1][:, 0])
+        assert (layer.data.shape == c_b.shape)
+        layer.data = c_b
 # Logging into Tensorboard
 writer = SummaryWriter(comment='-'+seq_name)
 y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
@@ -80,8 +118,8 @@ if vis_net:
 
 
 # Use the following optimizer
-lr = Params.lr()
-wd = Params.wd()
+lr = 1e-8
+wd = 0.0002
 optimizer = optim.SGD([
     {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
     {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': lr * 2},
