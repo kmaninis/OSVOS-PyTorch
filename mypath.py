@@ -4,15 +4,15 @@ from path_abstract import PathAbstract
 class Path(PathAbstract):
     @staticmethod
     def db_root_dir():
-        return '/media/eec/external/Databases/Segmentation/DAVIS/'
+        return '/scratch_net/zoidberg_second/csergi/Databases/DAVIS'
 
     @staticmethod
     def save_root_dir():
-        return '/home/eec/Desktop/pytorch_experiments/osvos/deconv'
+        return '/srv/glusterfs/kmaninis/pytorch_experiments/osvos/deconv'
 
     @staticmethod
     def exp_dir():
-        return '/home/eec/Desktop/pytorch_experiments/osvos/deconv'
+        return '/srv/glusterfs/kmaninis/pytorch_experiments/osvos/deconv'
 
     @staticmethod
     def is_custom_pytorch():
@@ -20,7 +20,7 @@ class Path(PathAbstract):
 
     @staticmethod
     def custom_pytorch():
-        return "/home/eec/Documents/external/deep_learning/pytorch/build/lib.linux-x86_64-2.7"
+        return "/home/kmaninis/scratch_net/reinhold/Kevis/Software/apps/pytorch/build/lib.linux-x86_64-2.7"
 
     @staticmethod
     def is_custom_opencv():

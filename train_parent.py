@@ -38,6 +38,8 @@ elif 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
 else:
     gpu_id = int(os.environ['SGE_GPU'])
 
+print('Using GPU: {} '.format(gpu_id))
+
 # Setting of parameters
 # Parameters in p are used for the name of the model
 p = {
@@ -59,9 +61,17 @@ nAveGrad = 10
 side_supervision = [1.0]*72
 side_supervision.extend([0.5]*72)
 side_supervision.extend([0.0]*96)
+resume_epoch = 20 # Default is 0, change if want to resume
 
 # Network definition
-net = vo.OSVOS(pretrained=1)
+modelName = tb.construct_name(p, "OSVOS_parent_exact")
+if resume_epoch == 0:
+	net = vo.OSVOS(pretrained=1)
+else:
+	net = vo.OSVOS(pretrained=0)
+	print("Updating weights from: {}".format(os.path.join(save_dir, 'models', modelName+'_epoch-' + str(resume_epoch-1) + '.pth')))
+	net.load_state_dict(torch.load(os.path.join(save_dir, 'models', modelName+'_epoch-' + str(resume_epoch-1) + '.pth'),
+   	                            map_location=lambda storage, loc: storage))
 
 # Logging into Tensorboard
 writer = SummaryWriter(comment='-parent')
@@ -84,16 +94,16 @@ if gpu_id >= 0:
 lr = 1e-8
 wd = 0.0002
 optimizer = optim.SGD([
-    {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
-    {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': lr * 2},
-    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
-    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'bias' in pr[0]], 'lr': lr*2},
-    {'params': [pr[1] for pr in net.score_dsn.named_parameters() if 'weight' in pr[0]], 'lr': lr/10, 'weight_decay': wd},
-    {'params': [pr[1] for pr in net.score_dsn.named_parameters() if 'bias' in pr[0]], 'lr': 2*lr/10},
-    {'params': [pr[1] for pr in net.upscale.named_parameters() if 'weight' in pr[0]], 'lr': 0},
-    {'params': [pr[1] for pr in net.upscale_.named_parameters() if 'weight' in pr[0]], 'lr': 0},
-    {'params': net.fuse.weight, 'lr': lr/100, 'weight_decay': wd},
-    {'params': net.fuse.bias, 'lr': 2*lr/100},
+    {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd, 'initial_lr': lr},
+    {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': 2*lr, 'initial_lr': 2*lr},
+    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd, 'initial_lr': lr},
+    {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'bias' in pr[0]], 'lr': 2*lr, 'initial_lr': 2*lr},
+    {'params': [pr[1] for pr in net.score_dsn.named_parameters() if 'weight' in pr[0]], 'lr': lr/10, 'weight_decay': wd, 'initial_lr': lr/10},
+    {'params': [pr[1] for pr in net.score_dsn.named_parameters() if 'bias' in pr[0]], 'lr': 2*lr/10, 'initial_lr': 2*lr/10},
+    {'params': [pr[1] for pr in net.upscale.named_parameters() if 'weight' in pr[0]], 'lr': 0, 'initial_lr': 0},
+    {'params': [pr[1] for pr in net.upscale_.named_parameters() if 'weight' in pr[0]], 'lr': 0, 'initial_lr': 0},
+    {'params': net.fuse.weight, 'lr': lr/100, 'initial_lr': lr/100, 'weight_decay': wd},
+    {'params': net.fuse.bias, 'lr': 2*lr/100, 'initial_lr': 2*lr/100},
     ], lr=lr, momentum=0.9)
 
 
@@ -107,7 +117,7 @@ def lr_schedule(epoch):
 # lr_schedule = lambda iter: 0.1 if (48 < iter < 72 or 120 < iter < 146 or 48 < iter < 240) else 1
 
 
-scheduler = LambdaLR(optimizer, lr_schedule)
+scheduler = LambdaLR(optimizer, lr_schedule, last_epoch=resume_epoch-1)
 
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
@@ -131,11 +141,9 @@ loss_tr = []
 loss_ts = []
 aveGrad = 0
 
-modelName = tb.construct_name(p, "OSVOS_parent_exact")
-
 print("Training Network")
 # Main Training and Testing Loop
-for epoch in range(0, nEpochs):
+for epoch in range(resume_epoch, nEpochs):
     start_time = timeit.default_timer()
     # Adjust the learning rate
     scheduler.step()
