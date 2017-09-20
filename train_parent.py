@@ -31,8 +31,10 @@ from torch.optim.lr_scheduler import LambdaLR
 from tensorboardX import SummaryWriter
 
 # Select which GPU, -1 if CPU
-if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
+if socket.gethostname() == 'eec':
     gpu_id = 1
+elif 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
+    gpu_id = -1
 else:
     gpu_id = int(os.environ['SGE_GPU'])
 
