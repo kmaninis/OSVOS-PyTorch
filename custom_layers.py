@@ -49,7 +49,7 @@ def center_crop(x, height, width):
     crop_w = torch.FloatTensor([x.size()[3]]).sub(width).div(-2)
 
     return F.pad(x, [
-        crop_w.ceil().int()[0], crop_w.floor().int()[0],
+        crop_h.ceil().int()[0], (crop_w+crop_w-crop_h).floor().int()[0],
         crop_h.ceil().int()[0], crop_h.floor().int()[0],
     ])
 

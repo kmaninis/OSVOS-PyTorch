@@ -54,20 +54,30 @@ class OSVOS(nn.Module):
 
     def forward(self, x):
         crop_h, crop_w = int(x.size()[-2]), int(x.size()[-1])
+        conv_res = []
+        conv_side = []
+        conv_side_up = []
+        conv_side_up_cr = []
         x = self.stages[0](x)
-
+        conv_res.append(x)
         side = []
         side_out = []
         for i in range(1, len(self.stages)):
             x = self.stages[i](x)
+            conv_res.append(x)
             side_temp = self.side_prep[i - 1](x)
-            side.append(center_crop(self.upscale[i - 1](side_temp), crop_h, crop_w))
+            conv_side.append(side_temp)
+            up_tmp = self.upscale[i - 1](side_temp)
+            conv_side_up.append(up_tmp)
+            crop_tmp = center_crop(up_tmp, crop_h, crop_w)
+            side.append(crop_tmp)
+            conv_side_up_cr.append(crop_tmp)
             side_out.append(center_crop(self.upscale_[i - 1](self.score_dsn[i - 1](side_temp)), crop_h, crop_w))
 
         out = torch.cat(side[:], dim=1)
         out = self.fuse(out)
         side_out.append(out)
-        return side_out
+        return side_out, conv_res, conv_side, conv_side_up, conv_side_up_cr
 
     def _initialize_weights(self, pretrained):
         for m in self.modules():
@@ -148,7 +158,7 @@ def make_layers_osvos(cfg, in_channels):
     layers = []
     for v in cfg:
         if v == 'M':
-            layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+            layers.append(nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True))
         else:
             conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
             layers.extend([conv2d, nn.ReLU(inplace=True)])

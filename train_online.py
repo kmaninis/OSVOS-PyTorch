@@ -51,7 +51,7 @@ p = {
 
 parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
 if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
-    gpu_id = 1  # Select which GPU, -1 if CPU
+    gpu_id = -1  # Select which GPU, -1 if CPU
 else:
     gpu_id = int(os.environ['SGE_GPU'])
 
@@ -99,7 +99,7 @@ for ind, layer in enumerate(net.fuse.parameters()):
         layer.data = c_b
 # Logging into Tensorboard
 writer = SummaryWriter(comment='-'+seq_name)
-y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
+y, test, test2, test3, test4 = net.forward(Variable(torch.randn(1, 3, 480, 854)))
 writer.add_graph(net, y[-1])
 
 if gpu_id >= 0:
@@ -138,7 +138,7 @@ composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
                                           # tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
                                           tb.ToTensor()])
 # Training dataset and its iterator
-db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
+db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
 trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=2)
 
 # Testing dataset and its iterator
@@ -160,13 +160,80 @@ for epoch in range(0, nEpochs):
     for ii, sample_batched in enumerate(trainloader):
 
         inputs, gts = sample_batched['image'], sample_batched['gt']
-
         # Forward-Backward of the mini-batch
         inputs, gts = Variable(inputs), Variable(gts)
+        np.sum(caffe_forward['img_input'].transpose() - inputs.data.numpy()) / (854 * 480 * 3)
+        np.sum(caffe_forward['blob_v'][0][0].transpose() - inputs.data.numpy()) / (854 * 480 * 3)
         if gpu_id >= 0:
             inputs, gts = inputs.cuda(), gts.cuda()
 
-        outputs = net.forward(inputs)
+
+        outputs, conv_res, conv_side, conv_side_up, conv_side_up_cr = net.forward(inputs)
+        # Result after conv1_2
+        size = conv_res[0].data.numpy()[0, :, :, :].shape
+        print('Error conv1_2:{}'.format(np.sum(caffe_forward['blob_v'][0][7].transpose()-conv_res[0].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        # Result after conv2_2
+        size = conv_res[0].data.numpy()[0, :, :, :].shape
+        print('Error conv2_2:{}'.format(np.sum(caffe_forward['blob_v'][0][10].transpose()-conv_res[1].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        # Result after conv3_3
+        size = conv_res[0].data.numpy()[0, :, :, :].shape
+        print('Error conv3_3:{}'.format(np.sum(caffe_forward['blob_v'][0][16].transpose()-conv_res[2].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        # Result after conv4_3
+        size = conv_res[0].data.numpy()[0, :, :, :].shape
+        print('Error conv4_3:{}'.format(np.sum(caffe_forward['blob_v'][0][22].transpose()-conv_res[3].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        # Result after conv5_3
+        size = conv_res[0].data.numpy()[0, :, :, :].shape
+        print('Error conv5_3:{}'.format(np.sum(caffe_forward['blob_v'][0][28].transpose()-conv_res[4].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        # After compression to 16 channels
+        size = conv_side[0].data.numpy()[0, :, :, :].shape
+        print('Error conv2_16:{}'.format(np.sum(caffe_forward['blob_v'][0][29].transpose()-conv_side[0].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side[1].data.numpy()[0, :, :, :].shape
+        print('Error conv3_16:{}'.format(np.sum(caffe_forward['blob_v'][0][30].transpose()-conv_side[1].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side[2].data.numpy()[0, :, :, :].shape
+        print('Error conv4_16:{}'.format(np.sum(caffe_forward['blob_v'][0][31].transpose()-conv_side[2].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side[3].data.numpy()[0, :, :, :].shape
+        print('Error conv5_16:{}'.format(np.sum(caffe_forward['blob_v'][0][32].transpose()-conv_side[3].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        # After upsample
+        # size = conv_side_up[0].data.numpy()[0, :, :, :].shape
+        # print('Error conv2_up:{}'.format(np.sum(caffe_forward['blob_v'][0][33].transpose()-conv_side_up[0].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side_up[1].data.numpy()[0, :, :, :].shape
+        print('Error conv3_up:{}'.format(np.sum(caffe_forward['blob_v'][0][35].transpose()-conv_side_up[1].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side_up[2].data.numpy()[0, :, :, :].shape
+        print('Error conv4_up:{}'.format(np.sum(caffe_forward['blob_v'][0][37].transpose()-conv_side_up[2].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side_up[3].data.numpy()[0, :, :, :].shape
+        print('Error conv5_up:{}'.format(np.sum(caffe_forward['blob_v'][0][39].transpose()-conv_side_up[3].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        # After upsample and crop
+        size = conv_side_up_cr[0].data.numpy()[0, :, :, :].shape
+        print('Error conv2_up_cr:{}'.format(np.sum(caffe_forward['blob_v'][0][34].transpose()-conv_side_up_cr[0].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side_up_cr[1].data.numpy()[0, :, :, :].shape
+        print('Error conv3_up_cr:{}'.format(np.sum(caffe_forward['blob_v'][0][36].transpose()-conv_side_up_cr[1].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side_up_cr[2].data.numpy()[0, :, :, :].shape
+        print('Error conv4_up_cr:{}'.format(np.sum(caffe_forward['blob_v'][0][38].transpose()-conv_side_up_cr[2].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+        size = conv_side_up_cr[3].data.numpy()[0, :, :, :].shape
+        print('Error conv5_up_cr:{}'.format(np.sum(caffe_forward['blob_v'][0][40].transpose()-conv_side_up_cr[3].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])))
+
+
+        # Final output
+        size = conv_res[0].data.numpy()[0, :, :, :].shape
+        np.sum(caffe_forward['blob_v'][0][-2].transpose()-outputs[0].data.numpy()[0, :, :, :])/(size[0]*size[1]*size[2])
+
+
 
         # Compute the fuse loss
         loss = class_balanced_cross_entropy_loss(outputs[-1], gts, size_average=False)
