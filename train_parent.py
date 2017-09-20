@@ -18,6 +18,7 @@ import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
 import numpy as np
 import scipy.misc as sm
+import scipy.io
 
 # PyTorch includes
 import torch
@@ -61,12 +62,28 @@ nAveGrad = 10
 side_supervision = [1.0] * 72
 side_supervision.extend([0.5] * 72)
 side_supervision.extend([0.0] * 96)
+load_caffe_vgg = 0
 resume_epoch = 20  # Default is 0, change if want to resume
 
 # Network definition
 modelName = tb.construct_name(p, "OSVOS_parent_exact")
 if resume_epoch == 0:
     net = vo.OSVOS(pretrained=1)
+    if load_caffe_vgg:
+        # Load weights from Caffe
+        caffe_weights = scipy.io.loadmat('models/vgg_hed_caffe.mat')
+        # Core network
+        caffe_ind = 0
+        for ind, layer in enumerate(net.stages.parameters()):
+            if ind % 2 == 0:
+                c_w = torch.from_numpy(caffe_weights['weights'][0][caffe_ind].transpose())
+                assert (layer.data.shape == c_w.shape)
+                layer.data = c_w
+            else:
+                c_b = torch.from_numpy(caffe_weights['biases'][0][caffe_ind][:, 0])
+                assert (layer.data.shape == c_b.shape)
+                layer.data = c_b
+                caffe_ind += 1
 else:
     net = vo.OSVOS(pretrained=0)
     print("Updating weights from: {}".format(
