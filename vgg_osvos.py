@@ -7,6 +7,8 @@ from custom_layers import center_crop
 import torch.nn.modules as modules
 import numpy as np
 import scipy.io
+from mypath import Path
+import os
 
 
 class OSVOS(nn.Module):
@@ -93,7 +95,7 @@ class OSVOS(nn.Module):
             _vgg = VGG(make_layers(vgg_structure))
 
             # Load the weights from saved model
-            _vgg.load_state_dict(torch.load('../models/vgg16-397923af.pth',
+            _vgg.load_state_dict(torch.load(os.path.join(Path.models_dir(), 'vgg16-397923af.pth'),
                                             map_location=lambda storage, loc: storage))
 
             # Load the weights directly from the web
@@ -110,7 +112,7 @@ class OSVOS(nn.Module):
         elif pretrained == 2:
             print("Loading weights from Caffe VGG")
             # Load weights from Caffe
-            caffe_weights = scipy.io.loadmat('../models/vgg_hed_caffe.mat')
+            caffe_weights = scipy.io.loadmat(os.path.join(Path.models_dir(),'vgg_hed_caffe.mat'))
             # Core network
             caffe_ind = 0
             for ind, layer in enumerate(self.stages.parameters()):

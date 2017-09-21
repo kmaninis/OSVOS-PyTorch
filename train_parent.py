@@ -5,12 +5,14 @@ import sys
 import os
 import socket
 import timeit
+sys.path.append('../../OSVOS-PyTorch')
 from mypath import Path
 
 if Path.is_custom_pytorch():
     sys.path.append(Path.custom_pytorch())  # Custom PyTorch
 if Path.is_custom_opencv():
     sys.path.insert(0, Path.custom_opencv())
+
 # Custom includes
 import visualize as viz
 import osvos_toolbox as tb
@@ -18,7 +20,6 @@ import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
 import numpy as np
 import scipy.misc as sm
-from git import Repo
 from datetime import datetime
 
 # PyTorch includes
@@ -49,14 +50,15 @@ p = {
 }
 
 # # Setting other parameters
+exp_name = 'exp_name'
 nEpochs = 240  # Number of epochs for training (500.000/2079)
 useTest = 1  # See evolution of the test set when training?
 testBatch = 1  # Testing Batch
 nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
 save_dir_root = Path.save_root_dir()
-repo = Repo(os.getcwd()).active_branch.name
-save_dir = os.path.join(save_dir_root, 'experiments', repo)
+
+save_dir = os.path.join(save_dir_root, 'experiments', exp_name)
 if not os.path.exists(save_dir):
     os.makedirs(os.path.join(save_dir))
 vis_net = 0  # Visualize the network?
@@ -78,14 +80,14 @@ if resume_epoch == 0:
 else:
     net = vo.OSVOS(pretrained=0)
     print("Updating weights from: {}".format(
-        os.path.join(save_dir, 'models', modelName + '_epoch-' + str(resume_epoch - 1) + '.pth')))
+        os.path.join(save_dir, modelName + '_epoch-' + str(resume_epoch - 1) + '.pth')))
     net.load_state_dict(
-        torch.load(os.path.join(save_dir, 'models', modelName + '_epoch-' + str(resume_epoch - 1) + '.pth'),
+        torch.load(os.path.join(save_dir, modelName + '_epoch-' + str(resume_epoch - 1) + '.pth'),
                    map_location=lambda storage, loc: storage))
 
 # Logging into Tensorboard
 log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname())
-writer = SummaryWriter(comment='-parent')
+writer = SummaryWriter(log_dir=log_dir, comment='-parent')
 y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
 writer.add_graph(net, y[-1])
 
@@ -210,7 +212,7 @@ for epoch in range(resume_epoch, nEpochs):
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName + '_epoch-' + str(epoch) + '.pth'))
+        torch.save(net.state_dict(), os.path.join(save_dir, modelName + '_epoch-' + str(epoch) + '.pth'))
 
     # One testing epoch
     if useTest and epoch % nTestInterval == (nTestInterval - 1):
@@ -247,7 +249,7 @@ writer.close()
 # Test parent network
 net = vo.OSVOS(pretrained=0)
 parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
-net.load_state_dict(torch.load(os.path.join('models', parentModelName + '_epoch-' + str(nEpochs) + '.pth'),
+net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName + '_epoch-' + str(nEpochs-1) + '.pth'),
                                map_location=lambda storage, loc: storage))
 with open(os.path.join(Path.db_root_dir(), 'val_seqs.txt'), 'r') as f:
     seqs = f.readlines()
@@ -257,9 +259,9 @@ for seq_name in seqs:
     db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
     testloader = DataLoader(db_test, batch_size=1, shuffle=False, num_workers=2)
 
-    save_dir = os.path.join(Path.save_root_dir(), parentModelName, seq_name)
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+    save_dir_seq = os.path.join(save_dir, parentModelName, seq_name)
+    if not os.path.exists(save_dir_seq):
+        os.makedirs(save_dir_seq)
 
     print('Testing Network')
     # Main Testing Loop
@@ -283,7 +285,7 @@ for seq_name in seqs:
             gt_ = np.squeeze(gt)
 
             # Save the result, attention to the index jj
-            sm.imsave(os.path.join(save_dir, os.path.basename(fname[jj]) + '.png'), pred)
+            sm.imsave(os.path.join(save_dir_seq, os.path.basename(fname[jj]) + '.png'), pred)
 # save_dir = os.path.join(Path.save_root_dir(), parentModelName)
 # eng = matlab.engine.start_matlab('-nodesktop -nodisplay -nosplash -nojvm -r '
 #                                  '"cd {};run initialization.m"'.format(Path.matlab_code()))
