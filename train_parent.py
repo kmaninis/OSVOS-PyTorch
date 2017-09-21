@@ -5,7 +5,11 @@ import sys
 import os
 import socket
 import timeit
-sys.path.append('../../OSVOS-PyTorch')
+if 'experiments' in os.getcwd():
+    sys.path.append('../../OSVOS-PyTorch')
+else:
+    sys.path.append('OSVOS-PyTorch')
+
 from mypath import Path
 
 if Path.is_custom_pytorch():
