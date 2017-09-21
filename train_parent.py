@@ -18,7 +18,8 @@ import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
 import numpy as np
 import scipy.misc as sm
-import scipy.io
+from git import Repo
+import datetime
 
 # PyTorch includes
 import torch
@@ -53,11 +54,13 @@ useTest = 1  # See evolution of the test set when training?
 testBatch = 1  # Testing Batch
 nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
-save_dir = Path.save_root_dir()
+save_dir_root = Path.save_root_dir()
+repo = Repo(os.getcwd()).active_branch.name
+save_dir = os.path.join(save_dir_root, 'experiments', repo)
 if not os.path.exists(save_dir):
-    os.makedirs(os.path.join(save_dir, 'models'))
+    os.makedirs(os.path.join(save_dir))
 vis_net = 0  # Visualize the network?
-snapshot = 0  # Store a model every snapshot epochs
+snapshot = 40  # Store a model every snapshot epochs
 nAveGrad = 10
 side_supervision = [1.0] * 72
 side_supervision.extend([0.5] * 72)
@@ -68,23 +71,10 @@ resume_epoch = 0  # Default is 0, change if want to resume
 # Network definition
 modelName = tb.construct_name(p, "OSVOS_parent_exact")
 if resume_epoch == 0:
-    net = vo.OSVOS(pretrained=1)
-    # TODO: Port it to .pth
     if load_caffe_vgg:
-        # Load weights from Caffe
-        caffe_weights = scipy.io.loadmat('models/vgg_hed_caffe.mat')
-        # Core network
-        caffe_ind = 0
-        for ind, layer in enumerate(net.stages.parameters()):
-            if ind % 2 == 0:
-                c_w = torch.from_numpy(caffe_weights['weights'][0][caffe_ind].transpose())
-                assert (layer.data.shape == c_w.shape)
-                layer.data = c_w
-            else:
-                c_b = torch.from_numpy(caffe_weights['biases'][0][caffe_ind][:, 0])
-                assert (layer.data.shape == c_b.shape)
-                layer.data = c_b
-                caffe_ind += 1
+        net = vo.OSVOS(pretrained=2)
+    else:
+        net = vo.OSVOS(pretrained=1)
 else:
     net = vo.OSVOS(pretrained=0)
     print("Updating weights from: {}".format(
@@ -94,6 +84,7 @@ else:
                    map_location=lambda storage, loc: storage))
 
 # Logging into Tensorboard
+log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname())
 writer = SummaryWriter(comment='-parent')
 y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
 writer.add_graph(net, y[-1])
@@ -133,14 +124,12 @@ optimizer = optim.SGD([
 
 
 def lr_schedule(epoch):
-    print('Epoch {}'.format(epoch))
+    # print('Epoch {}'.format(epoch))
     if 48 <= epoch < 72 or 120 <= epoch < 144 or 192 <= epoch < 240:
-        print('Learning rate reduced')
+        # print('Learning rate reduced')
         return 0.1
     else:
         return 1
-
-
 # lr_schedule = lambda iter: 0.1 if (48 < iter < 72 or 120 < iter < 146 or 48 < iter < 240) else 1
 
 

@@ -6,6 +6,7 @@ from copy import deepcopy
 from custom_layers import center_crop
 import torch.nn.modules as modules
 import numpy as np
+import scipy.io
 
 
 class OSVOS(nn.Module):
@@ -85,7 +86,8 @@ class OSVOS(nn.Module):
                 m.weight.data.zero_()
                 m.weight.data = interp_surgery(m)
 
-        if pretrained:
+        if pretrained == 1:
+            print("Loading weights from PyTorch VGG")
             vgg_structure = [64, 64, 'M', 128, 128, 'M', 256, 256, 256,
                              'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
             _vgg = VGG(make_layers(vgg_structure))
@@ -105,7 +107,22 @@ class OSVOS(nn.Module):
                         self.stages[i][j].weight = deepcopy(_vgg.features[inds[k]].weight)
                         self.stages[i][j].bias = deepcopy(_vgg.features[inds[k]].bias)
                         k += 1
-
+        elif pretrained == 2:
+            print("Loading weights from Caffe VGG")
+            # Load weights from Caffe
+            caffe_weights = scipy.io.loadmat('../models/vgg_hed_caffe.mat')
+            # Core network
+            caffe_ind = 0
+            for ind, layer in enumerate(self.stages.parameters()):
+                if ind % 2 == 0:
+                    c_w = torch.from_numpy(caffe_weights['weights'][0][caffe_ind].transpose())
+                    assert (layer.data.shape == c_w.shape)
+                    layer.data = c_w
+                else:
+                    c_b = torch.from_numpy(caffe_weights['biases'][0][caffe_ind][:, 0])
+                    assert (layer.data.shape == c_b.shape)
+                    layer.data = c_b
+                    caffe_ind += 1
 
 def upsample_filt(size):
     factor = (size + 1) // 2

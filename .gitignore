@@ -12,3 +12,4 @@ params.py
 *.txt
 cluster/script.sh
 cluster/train_parent.sh
+experiments/
