@@ -19,7 +19,7 @@ from custom_layers import class_balanced_cross_entropy_loss
 import numpy as np
 import scipy.misc as sm
 from git import Repo
-import datetime
+from datetime import datetime
 
 # PyTorch includes
 import torch
