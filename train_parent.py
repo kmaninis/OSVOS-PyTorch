@@ -54,7 +54,7 @@ p = {
 }
 
 # # Setting other parameters
-exp_name = 'exp_name'
+exp_name = os.path.dirname(os.path.abspath(__file__)).split('/')[-1]
 nEpochs = 240  # Number of epochs for training (500.000/2079)
 useTest = 1  # See evolution of the test set when training?
 testBatch = 1  # Testing Batch
