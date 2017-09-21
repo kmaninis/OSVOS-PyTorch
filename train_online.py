@@ -1,14 +1,18 @@
 # Package Includes
 from __future__ import division
 import sys
+import os
 from mypath import Path
 if Path.is_custom_pytorch():
     sys.path.append(Path.custom_pytorch())  # Custom PyTorch
-
+if 'experiments' in os.getcwd():
+    sys.path.append('../../OSVOS-PyTorch')
+else:
+    sys.path.append('OSVOS-PyTorch')
 import numpy as np
-import os
 import socket
 import timeit
+from datetime import datetime
 
 # Custom includes
 import scipy.misc as sm
@@ -34,12 +38,16 @@ else:
     seq_name = str(os.environ['SEQ_NAME'])
 
 db_root_dir = Path.db_root_dir()
-save_root_dir = Path.save_root_dir()
+save_dir_root = Path.save_root_dir()
+exp_name = os.path.dirname(os.path.abspath(__file__)).split('/')[-1]
+save_dir = os.path.join(save_dir_root, 'experiments', exp_name)
+if not os.path.exists(save_dir):
+    os.makedirs(os.path.join(save_dir))
 exp_dir = Path.exp_dir()
 vis_net = 0  # Visualize the network?
 vis_res = 0  # Visualize the results?
-nAveGrad = Params.nAveGrad()
-nEpochs = Params.nEpochs() * nAveGrad  # Number of epochs for training
+nAveGrad = 5
+nEpochs = 4 * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
 parentEpoch = 240
 
@@ -49,18 +57,22 @@ p = {
     }
 
 parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
-if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
-    gpu_id = 1  # Select which GPU, -1 if CPU
+# Select which GPU, -1 if CPU
+if socket.gethostname() == 'eec':
+    gpu_id = 1
+elif 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
+    gpu_id = -1
 else:
     gpu_id = int(os.environ['SGE_GPU'])
 
 # Network definition
 net = vo.OSVOS(pretrained=0)
-net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+str(parentEpoch)+'.pth'),
+net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName+'_epoch-'+str(parentEpoch-1)+'.pth'),
                                map_location=lambda storage, loc: storage))
 
 # Logging into Tensorboard
-writer = SummaryWriter(comment='-'+seq_name)
+log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname())
+writer = SummaryWriter(log_dir=log_dir, comment='-'+seq_name)
 y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
 writer.add_graph(net, y[-1])
 
@@ -80,8 +92,8 @@ if vis_net:
 
 
 # Use the following optimizer
-lr = Params.lr()
-wd = Params.wd()
+lr = 1e-8
+wd = 0.0002
 optimizer = optim.SGD([
     {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
     {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': lr * 2},
@@ -157,7 +169,7 @@ for epoch in range(0, nEpochs):
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(exp_dir, 'models', seq_name + '_epoch-'+str(epoch+1) + '.pth'))
+        torch.save(net.state_dict(), os.path.join(save_dir, seq_name + '_epoch-'+str(epoch) + '.pth'))
 
 stop_time = timeit.default_timer()
 print('Online training time: ' + str(stop_time - start_time))
@@ -170,7 +182,7 @@ if vis_res:
     plt.ion()
     f, ax_arr = plt.subplots(1, 3)
 
-save_dir = os.path.join(save_root_dir, 'OSVOS_online', seq_name)
+save_dir = os.path.join(save_dir, 'OSVOS_online', seq_name)
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
