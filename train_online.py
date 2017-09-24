@@ -47,7 +47,7 @@ exp_dir = Path.exp_dir()
 vis_net = 0  # Visualize the network?
 vis_res = 0  # Visualize the results?
 nAveGrad = 5
-nEpochs = 4 * nAveGrad  # Number of epochs for training
+nEpochs = 2000 * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
 parentEpoch = 240
 
@@ -56,7 +56,7 @@ p = {
     'trainBatch': 1,  # Number of Images in each mini-batch
     }
 
-parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
+parentModelName = exp_name  # tb.construct_name(p, 'OSVOS_parent_exact')
 # Select which GPU, -1 if CPU
 if socket.gethostname() == 'eec':
     gpu_id = 1
