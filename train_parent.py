@@ -62,7 +62,11 @@ nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
 save_dir_root = Path.save_root_dir()
 
-save_dir = os.path.join(save_dir_root, 'experiments', exp_name)
+if 'experiments' in os.getcwd():
+    save_dir = os.path.join(save_dir_root, 'experiments', exp_name)
+else:
+    save_dir = './models'
+
 if not os.path.exists(save_dir):
     os.makedirs(os.path.join(save_dir))
 vis_net = 0  # Visualize the network?
