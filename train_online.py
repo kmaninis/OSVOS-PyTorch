@@ -2,13 +2,14 @@
 from __future__ import division
 import sys
 import os
-from mypath import Path
-if Path.is_custom_pytorch():
-    sys.path.append(Path.custom_pytorch())  # Custom PyTorch
 if 'experiments' in os.getcwd():
     sys.path.append('../../OSVOS-PyTorch')
 else:
     sys.path.append('OSVOS-PyTorch')
+from mypath import Path
+if Path.is_custom_pytorch():
+    sys.path.append(Path.custom_pytorch())  # Custom PyTorch
+
 import numpy as np
 import socket
 import timeit
@@ -71,8 +72,8 @@ net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName+'_epoch-'+
                                map_location=lambda storage, loc: storage))
 
 # Logging into Tensorboard
-log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname())
-writer = SummaryWriter(log_dir=log_dir, comment='-'+seq_name)
+log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname()+'-'+seq_name)
+writer = SummaryWriter(log_dir=log_dir)
 y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
 writer.add_graph(net, y[-1])
 
