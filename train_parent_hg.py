@@ -6,9 +6,9 @@ import os
 import socket
 import timeit
 if 'experiments' in os.getcwd():
-    sys.path.append('../../OSVOS-PyTorch')
+    sys.path.append('../../OSVOS-PyTorch-debug')
 else:
-    sys.path.append('OSVOS-PyTorch')
+    sys.path.append('OSVOS-PyTorch-debug')
 
 from mypath import Path
 
@@ -32,7 +32,6 @@ from torch.autograd import Variable
 import torch.optim as optim
 from torchvision import transforms, utils
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import LambdaLR
 
 # Tensorboard include
 from tensorboardX import SummaryWriter
@@ -66,10 +65,7 @@ nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
 save_dir_root = Path.save_root_dir()
 
-if 'experiments' in os.getcwd():
-    save_dir = os.path.join(save_dir_root, 'experiments', exp_name)
-else:
-    save_dir = './models'
+save_dir = './models'
 
 if not os.path.exists(save_dir):
     os.makedirs(os.path.join(save_dir))
@@ -79,7 +75,6 @@ nAveGrad = 10
 side_supervision = [1.0] * 72
 side_supervision.extend([0.5] * 72)
 side_supervision.extend([0.0] * 96)
-load_caffe_vgg = 1
 resume_epoch = 0  # Default is 0, change if want to resume
 
 # Network definition
@@ -225,10 +220,11 @@ for epoch in range(resume_epoch, nEpochs):
 writer.close()
 
 # Test parent network
-net = nt.Net_SHG(p['numHG'], numHGScales, p['Block'], 128, 1)
+# net = nt.Net_SHG(p['numHG'], numHGScales, p['Block'], 128, 1)
 parentModelName = exp_name  # tb.construct_name(p, 'OSVOS_parent_exact')
-net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName + '_epoch-' + str(nEpochs-1) + '.pth'),
-                               map_location=lambda storage, loc: storage))
+save_dir_res = 'Results_parent'
+# net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName + '_epoch-' + str(nEpochs-1) + '.pth'),
+#                                map_location=lambda storage, loc: storage))
 with open(os.path.join(Path.db_root_dir(), 'val_seqs.txt'), 'r') as f:
     seqs = f.readlines()
 seqs = map(lambda seq: seq.strip(), seqs)
@@ -237,7 +233,7 @@ for seq_name in seqs:
     db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
     testloader = DataLoader(db_test, batch_size=1, shuffle=False, num_workers=2)
 
-    save_dir_seq = os.path.join(save_dir, parentModelName, seq_name)
+    save_dir_seq = os.path.join(save_dir_res, seq_name)
     if not os.path.exists(save_dir_seq):
         os.makedirs(save_dir_seq)
 
