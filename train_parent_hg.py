@@ -98,17 +98,19 @@ else:
 log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname())
 writer = SummaryWriter(log_dir=log_dir, comment='-parent')
 
+if gpu_id >= 0:
+    torch.cuda.set_device(device=gpu_id)
+    net.cuda()
+
 # Visualize the network
 if vis_net:
     x = torch.randn(1, 3, 512, 896)
     x = Variable(x)
+    if gpu_id >= 0:
+        x = x.cuda()
     y = net.forward(x)
     g = viz.make_dot(y, net.state_dict())
     g.view()
-
-if gpu_id >= 0:
-    torch.cuda.set_device(device=gpu_id)
-    net.cuda()
 
 # Use the following optimizer
 lr = 1e-5

@@ -2,22 +2,22 @@ import torch.nn as nn
 import math
 
 
-def conv3x3(in_planes, out_planes, stride=1):
+def conv3x3(in_planes, out_planes, stride=1, dilation=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, dilation=1, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, dilation=dilation, bias=False)
 
 
-def conv1x1(in_planes, out_planes):
+def conv1x1(in_planes, out_planes, stride=1, dilation=1):
     """1x1 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, padding=0, dilation=dilation, bias=False)
 
 
 class ConvBlock(nn.Module):
     """Simple Convolutional Block consisting of conv - bn - ReLU layers"""
 
-    def __init__(self, numIn, numOut, stride=1, downsample=None):
+    def __init__(self, numIn, numOut, stride=1, dilation=1,downsample=None):
         super(ConvBlock, self).__init__()
-        self.conv1 = conv3x3(numIn, numIn, stride)
+        self.conv1 = conv3x3(numIn, numIn, stride=stride, dilation=dilation)
         self.bn1 = nn.BatchNorm2d(numIn)
         self.relu = nn.ReLU(inplace=True)
 
@@ -47,12 +47,12 @@ class ConvBlock(nn.Module):
 class BasicBlock(nn.Module):
     """Residual block without bottleneck"""
 
-    def __init__(self, numIn, numOut, stride=1, downsample=None):
+    def __init__(self, numIn, numOut, stride=1, dilation=1, downsample=None):
         super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(numIn, numOut, stride)
+        self.conv1 = conv3x3(numIn, numOut, stride=stride, dilation=dilation)
         self.bn1 = nn.BatchNorm2d(numOut)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(numOut, numOut)
+        self.conv2 = conv3x3(numOut, numOut, dilation=dilation)
         self.bn2 = nn.BatchNorm2d(numOut)
         self.downsample = downsample
         self.stride = stride
@@ -91,15 +91,15 @@ class BottleNeck(nn.Module):
     """Residual block with bottleneck, suggested by
     Kaiming He et al., CVPR 2016"""
 
-    def __init__(self, numIn, numOut, stride=1, downsample=None):
+    def __init__(self, numIn, numOut, stride=1, dilation=1, downsample=None):
         super(BottleNeck, self).__init__()
 
-        self.conv1 = nn.Conv2d(numIn, numOut/2, kernel_size=1, bias=False)
+        self.conv1 = nn.Conv2d(numIn, numOut/2, kernel_size=1, bias=False, dilation=dilation)
         self.bn1 = nn.BatchNorm2d(numOut/2)
         self.conv2 = nn.Conv2d(numOut/2, numOut/2, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
+                               dilation=dilation, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(numOut/2)
-        self.conv3 = nn.Conv2d(numOut/2, numOut, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(numOut/2, numOut, kernel_size=1, bias=False, dilation=dilation)
         self.bn3 = nn.BatchNorm2d(numOut)
         self.relu = nn.ReLU(inplace=True)
         self.bn4 = nn.BatchNorm2d(numOut)
@@ -141,15 +141,15 @@ class BottleneckPreact(nn.Module):
     """Residual block with bottleneck, improvement suggested by
     Kaiming He et al., ECCV 2016"""
 
-    def __init__(self, numIn, numOut, stride=1, downsample=None):
+    def __init__(self, numIn, numOut, stride=1, dilation=1, downsample=None):
         super(BottleneckPreact, self).__init__()
 
         self.bn1 = nn.BatchNorm2d(numIn)
-        self.conv1 = nn.Conv2d(numIn, numOut/2, kernel_size=1, bias=False)
+        self.conv1 = nn.Conv2d(numIn, numOut/2, kernel_size=1, bias=False, dilation=dilation)
         self.bn2 = nn.BatchNorm2d(numOut / 2)
-        self.conv2 = nn.Conv2d(numOut/2, numOut/2, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(numOut/2, numOut/2, kernel_size=3, stride=stride, padding=1, bias=False, dilation=dilation)
         self.bn3 = nn.BatchNorm2d(numOut/2)
-        self.conv3 = nn.Conv2d(numOut/2, numOut, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(numOut/2, numOut, kernel_size=1, bias=False, dilation=dilation)
         self.relu = nn.ReLU(inplace=True)
         self.bn4 = nn.BatchNorm2d(numIn)
 
@@ -293,6 +293,186 @@ class Net_SHG(nn.Module):
         for i in range(0, self.nStack):
             x = self.hg[i](x)
             out.append(self.up4(self.convout[i](x)))
+
+        return out
+
+
+class Net_SHG_nodownscale(nn.Module):
+    """Create the stacked hourglass network"""
+
+    def __init__(self, nStack, nHGscales, blockstr, nFeat=32, nModules=1):
+        self.nStack = nStack
+        super(Net_SHG_nodownscale, self).__init__()
+        if blockstr == 'ConvBlock':
+            block = ConvBlock
+        elif blockstr == 'BasicBlock':
+            block = BasicBlock
+        elif blockstr == 'BottleNeck':
+            block = BottleNeck
+        elif blockstr == 'BottleneckPreact':
+            block = BottleneckPreact
+
+        print('Initializing {} hourglasses with {} blocks'.format(nStack, blockstr))
+
+        self.conv1 = nn.Conv2d(3, nFeat/4, kernel_size=7, stride=1, padding=3,
+                               bias=False)  # 128
+        self.bn1 = nn.BatchNorm2d(nFeat/4)
+        self.relu = nn.ReLU(inplace=True)
+
+        self.r1 = block(nFeat/4, nFeat/2)
+        self.r4 = block(nFeat/2, nFeat/2)
+        self.r5 = block(nFeat/2, nFeat)
+
+        hg = []
+        convout = []
+        for i in range(0, nStack):
+            layers = []
+            layers.append(HourGlass(nHGscales, block, nFeat, nModules))
+
+            for j in range(0, nModules):
+                layers.append(self._make_layer(block, nFeat, nModules))
+            convout.append(nn.Conv2d(nFeat, 1, kernel_size=3, padding=1))
+            hg.append(nn.Sequential(*layers))
+
+        # Use ListModule to create lists of layers, originally not allowed by PyTorch
+        self.hg = ListModule(*hg)
+        self.convout = ListModule(*convout)
+
+        # Weight Initialization
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(.5)
+                m.bias.data.zero_()
+
+    def _make_layer(self, block, nFeat, nModules):
+        layers = []
+        for i in range(0, nModules):
+            layers.append(block(nFeat, nFeat))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = (self.r1(x))
+        x = self.r5(self.r4(x))
+
+        out = []
+        for i in range(0, self.nStack):
+            x = self.hg[i](x)
+            out.append((self.convout[i](x)))
+
+        return out
+
+
+class HourGlass_dilation(nn.Module):
+    """Create a single hourglass"""
+
+    def __init__(self, numHGscales, block, nFeat=32, nModules=1, dilation=1):
+        self.inplanes = 64
+        super(HourGlass_dilation, self).__init__()
+
+        # Upper Branch
+        self.up1 = self._make_layer(block, nFeat, nModules, dilation=dilation)
+
+        # Lower Branch
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        self.low1 = self._make_layer(block, nFeat, nModules, dilation=dilation)
+
+        # Create internal hourglass recursively
+        print('Creating Hourglass with dilation {}'.format(dilation))
+        if numHGscales > 3:
+            self.low2 = HourGlass_dilation(numHGscales-1, block, nFeat, nModules, dilation=1)
+        elif numHGscales > 1:
+            self.low2 = HourGlass_dilation(numHGscales-1, block, nFeat, nModules, dilation=2)
+        else:
+            self.low2 = self._make_layer(block, nFeat, nModules, dilation=dilation)
+
+        self.low3 = self._make_layer(block, nFeat, nModules, dilation=dilation)
+        self.up2 = nn.Upsample(scale_factor=2, mode='bilinear')
+
+    def _make_layer(self, block, nFeat, nModules, dilation=1):
+        layers = []
+        for i in range(0, nModules):
+            layers.append(block(nFeat, nFeat, dilation=dilation))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        b_up = self.up1(x)
+        b_low = self.up2(self.low3(self.low2(self.low1(self.maxpool(x)))))
+        out = b_up + b_low
+        return out
+
+
+class Net_SHG_nodownscale_dilation(nn.Module):
+    """Create the stacked hourglass network"""
+
+    def __init__(self, nStack, nHGscales, blockstr, nFeat=32, nModules=1):
+        self.nStack = nStack
+        super(Net_SHG_nodownscale_dilation, self).__init__()
+        if blockstr == 'ConvBlock':
+            block = ConvBlock
+        elif blockstr == 'BasicBlock':
+            block = BasicBlock
+        elif blockstr == 'BottleNeck':
+            block = BottleNeck
+        elif blockstr == 'BottleneckPreact':
+            block = BottleneckPreact
+
+        print('Initializing {} hourglasses with {} blocks'.format(nStack, blockstr))
+
+        self.conv1 = nn.Conv2d(3, nFeat/4, kernel_size=7, stride=1, padding=3,
+                               bias=False)  # 128
+        self.bn1 = nn.BatchNorm2d(nFeat/4)
+        self.relu = nn.ReLU(inplace=True)
+
+        self.r1 = block(nFeat/4, nFeat/2)
+        self.r4 = block(nFeat/2, nFeat/2)
+        self.r5 = block(nFeat/2, nFeat)
+
+        hg = []
+        convout = []
+        for i in range(0, nStack):
+            layers = []
+            layers.append(HourGlass_dilation(nHGscales, block, nFeat, nModules))
+
+            for j in range(0, nModules):
+                layers.append(self._make_layer(block, nFeat, nModules))
+            convout.append(nn.Conv2d(nFeat, 1, kernel_size=3, padding=1))
+            hg.append(nn.Sequential(*layers))
+
+        # Use ListModule to create lists of layers, originally not allowed by PyTorch
+        self.hg = ListModule(*hg)
+        self.convout = ListModule(*convout)
+
+        # Weight Initialization
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(.5)
+                m.bias.data.zero_()
+
+    def _make_layer(self, block, nFeat, nModules):
+        layers = []
+        for i in range(0, nModules):
+            layers.append(block(nFeat, nFeat))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = (self.r1(x))
+        x = self.r5(self.r4(x))
+
+        out = []
+        for i in range(0, self.nStack):
+            x = self.hg[i](x)
+            out.append((self.convout[i](x)))
 
         return out
 
