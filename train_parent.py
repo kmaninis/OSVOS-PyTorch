@@ -62,7 +62,11 @@ nTestInterval = 5  # Run on test set every nTestInterval epochs
 db_root_dir = Path.db_root_dir()
 save_dir_root = Path.save_root_dir()
 
-save_dir = os.path.join(save_dir_root, 'experiments', exp_name)
+if 'experiments' in os.getcwd():
+    save_dir = os.path.join(save_dir_root, 'experiments', exp_name)
+else:
+    save_dir = './models'
+
 if not os.path.exists(save_dir):
     os.makedirs(os.path.join(save_dir))
 vis_net = 0  # Visualize the network?
@@ -75,7 +79,7 @@ load_caffe_vgg = 1
 resume_epoch = 0  # Default is 0, change if want to resume
 
 # Network definition
-modelName = tb.construct_name(p, "OSVOS_parent_exact")
+modelName = exp_name  # tb.construct_name(p, "OSVOS_parent_exact")
 if resume_epoch == 0:
     if load_caffe_vgg:
         net = vo.OSVOS(pretrained=2)
@@ -252,7 +256,7 @@ writer.close()
 
 # Test parent network
 net = vo.OSVOS(pretrained=0)
-parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
+parentModelName = exp_name  # tb.construct_name(p, 'OSVOS_parent_exact')
 net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName + '_epoch-' + str(nEpochs-1) + '.pth'),
                                map_location=lambda storage, loc: storage))
 with open(os.path.join(Path.db_root_dir(), 'val_seqs.txt'), 'r') as f:

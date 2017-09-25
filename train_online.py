@@ -16,9 +16,9 @@ import timeit
 from datetime import datetime
 
 # Custom includes
-import scipy.misc as sm
+import osvos_toolbox as tb  # import cv2 after import torch
 import visualize as viz
-import osvos_toolbox as tb
+import scipy.misc as sm
 import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
 
@@ -41,14 +41,17 @@ else:
 db_root_dir = Path.db_root_dir()
 save_dir_root = Path.save_root_dir()
 exp_name = os.path.dirname(os.path.abspath(__file__)).split('/')[-1]
-save_dir = os.path.join(save_dir_root, 'experiments', exp_name)
+
+save_dir = './models'
+
 if not os.path.exists(save_dir):
     os.makedirs(os.path.join(save_dir))
+
 exp_dir = Path.exp_dir()
 vis_net = 0  # Visualize the network?
 vis_res = 0  # Visualize the results?
 nAveGrad = 5
-nEpochs = 4 * nAveGrad  # Number of epochs for training
+nEpochs = 2000 * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
 parentEpoch = 240
 
@@ -57,7 +60,7 @@ p = {
     'trainBatch': 1,  # Number of Images in each mini-batch
     }
 
-parentModelName = tb.construct_name(p, 'OSVOS_parent_exact')
+parentModelName = 'OSVOS_parent_vgg_caffe_trainBatch-1'#exp_name  # tb.construct_name(p, 'OSVOS_parent_exact')
 # Select which GPU, -1 if CPU
 if socket.gethostname() == 'eec':
     gpu_id = 1
@@ -183,9 +186,9 @@ if vis_res:
     plt.ion()
     f, ax_arr = plt.subplots(1, 3)
 
-save_dir = os.path.join(save_dir, 'OSVOS_online', seq_name)
-if not os.path.exists(save_dir):
-    os.makedirs(save_dir)
+save_dir_res = os.path.join('Results', seq_name)
+if not os.path.exists(save_dir_res):
+    os.makedirs(save_dir_res)
 
 print('Testing Network')
 # Main Testing Loop
@@ -206,7 +209,7 @@ for ii, sample_batched in enumerate(testloader):
         pred = np.squeeze(pred)
 
         # Save the result, attention to the index jj
-        sm.imsave(os.path.join(save_dir, os.path.basename(fname[jj]) + '.png'), pred)
+        sm.imsave(os.path.join(save_dir_res, os.path.basename(fname[jj]) + '.png'), pred)
 
         if vis_res:
             img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
