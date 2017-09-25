@@ -1,7 +1,15 @@
+mypath.py
 .idea/
 *.gv
 *.pdf
 models/*
+runs/*
+*.pth
 *.pyc
 path.py
 params.py
+*.mat
+*.txt
+cluster/script.sh
+cluster/train_parent.sh
+experiments/
