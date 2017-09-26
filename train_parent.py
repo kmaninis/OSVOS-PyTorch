@@ -134,7 +134,7 @@ optimizer = optim.SGD([
 # Define augmentation transformations as a composition
 composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
                                           tb.Resize(),
-                                          # tb.ScaleNRotate(rots=[0], scales=[0.5, 0.8, 1]),
+                                          # tb.ScaleNRotate(rots=(-30,30), scales=(.75, 1.25)),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)

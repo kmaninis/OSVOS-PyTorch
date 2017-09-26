@@ -192,7 +192,7 @@ class ScaleNRotate(object):
         center = (w / 2, h / 2)
         M = cv2.getRotationMatrix2D(center, rot, sc)
         img_ = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC)
-        plt.imshow(img_)
+        # plt.imshow(img_)
 
         h_gt, w_gt = gt.shape[:2]
         center_gt = (w_gt / 2, h_gt / 2)
