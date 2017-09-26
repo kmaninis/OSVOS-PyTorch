@@ -77,8 +77,8 @@ net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName+'_epoch-'+
 # Logging into Tensorboard
 log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname()+'-'+seq_name)
 writer = SummaryWriter(log_dir=log_dir)
-y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
-writer.add_graph(net, y[-1])
+# y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
+# writer.add_graph(net, y[-1])
 
 if gpu_id >= 0:
     torch.cuda.set_device(device=gpu_id)
@@ -112,11 +112,12 @@ optimizer = optim.SGD([
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
 composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
-                                          tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
+                                          tb.Resize(),
+                                          # tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
-trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=2)
+trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=1)
 
 # Testing dataset and its iterator
 db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
