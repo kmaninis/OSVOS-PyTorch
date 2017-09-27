@@ -1,19 +1,24 @@
 # Package Includes
 from __future__ import division
 import sys
-from path import Path
-from params import Params
+import os
+if 'experiments' in os.getcwd():
+    sys.path.append('../../OSVOS-PyTorch')
+else:
+    sys.path.append('OSVOS-PyTorch')
+from mypath import Path
 if Path.is_custom_pytorch():
     sys.path.append(Path.custom_pytorch())  # Custom PyTorch
+
 import numpy as np
-import os
 import socket
 import timeit
+from datetime import datetime
 
 # Custom includes
-import scipy.misc as sm
+import osvos_toolbox as tb  # import cv2 after import torch
 import visualize as viz
-import osvos_toolbox as tb
+import scipy.misc as sm
 import vgg_osvos as vo
 from custom_layers import class_balanced_cross_entropy_loss
 
@@ -24,6 +29,8 @@ import torch.optim as optim
 from torchvision import transforms, utils
 from torch.utils.data import DataLoader
 
+# Tensorboard include
+from tensorboardX import SummaryWriter
 
 # Setting of parameters
 if 'SEQ_NAME' not in os.environ.keys():
@@ -32,31 +39,46 @@ else:
     seq_name = str(os.environ['SEQ_NAME'])
 
 db_root_dir = Path.db_root_dir()
-save_root_dir = Path.save_root_dir()
+save_dir_root = Path.save_root_dir()
+exp_name = os.path.dirname(os.path.abspath(__file__)).split('/')[-1]
+
+save_dir = './models'
+
+if not os.path.exists(save_dir):
+    os.makedirs(os.path.join(save_dir))
+
 exp_dir = Path.exp_dir()
 vis_net = 0  # Visualize the network?
 vis_res = 0  # Visualize the results?
-nAveGrad = Params.nAveGrad()
-nEpochs = Params.nEpochs() * nAveGrad  # Number of epochs for training
+nAveGrad = 5
+nEpochs = 2000 * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
-parentEpoch = 119
+parentEpoch = 240
 
 # Parameters in p are used for the name of the model
 p = {
     'trainBatch': 1,  # Number of Images in each mini-batch
     }
 
-parentModelName = tb.construct_name(p, 'OSVOS_parent')
-
-if 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
-    gpu_id = -1  # Select which GPU, -1 if CPU
+parentModelName = 'OSVOS_parent_vgg_caffe_trainBatch-1'#exp_name  # tb.construct_name(p, 'OSVOS_parent_exact')
+# Select which GPU, -1 if CPU
+if socket.gethostname() == 'eec':
+    gpu_id = 1
+elif 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
+    gpu_id = -1
 else:
     gpu_id = int(os.environ['SGE_GPU'])
 
 # Network definition
 net = vo.OSVOS(pretrained=0)
-net.load_state_dict(torch.load(os.path.join('models', parentModelName+'_epoch-'+str(parentEpoch)+'.pth'),
+net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName+'_epoch-'+str(parentEpoch-1)+'.pth'),
                                map_location=lambda storage, loc: storage))
+
+# Logging into Tensorboard
+log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname()+'-'+seq_name)
+writer = SummaryWriter(log_dir=log_dir)
+# y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
+# writer.add_graph(net, y[-1])
 
 if gpu_id >= 0:
     torch.cuda.set_device(device=gpu_id)
@@ -74,13 +96,15 @@ if vis_net:
 
 
 # Use the following optimizer
-lr = Params.lr()
-wd = Params.wd()
+lr = 1e-8
+wd = 0.0002
 optimizer = optim.SGD([
     {'params': [pr[1] for pr in net.stages.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
     {'params': [pr[1] for pr in net.stages.named_parameters() if 'bias' in pr[0]], 'lr': lr * 2},
     {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'weight' in pr[0]], 'weight_decay': wd},
     {'params': [pr[1] for pr in net.side_prep.named_parameters() if 'bias' in pr[0]], 'lr': lr*2},
+    {'params': [pr[1] for pr in net.upscale.named_parameters() if 'weight' in pr[0]], 'lr': 0},
+    {'params': [pr[1] for pr in net.upscale_.named_parameters() if 'weight' in pr[0]], 'lr': 0},
     {'params': net.fuse.weight, 'lr': lr/100, 'weight_decay': wd},
     {'params': net.fuse.bias, 'lr': 2*lr/100},
     ], lr=lr, momentum=0.9)
@@ -88,11 +112,12 @@ optimizer = optim.SGD([
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
 composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
-                                          tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
+                                          tb.Resize(),
+                                          # tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
                                           tb.ToTensor()])
 # Training dataset and its iterator
 db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
-trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=2)
+trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=1)
 
 # Testing dataset and its iterator
 db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
@@ -132,6 +157,7 @@ for epoch in range(0, nEpochs):
 
             print('[Epoch: %d, numImages: %5d]' % (epoch+1, ii + 1))
             print('Loss: %f' % running_loss_tr)
+            writer.add_scalar('data/total_loss_epoch', running_loss_tr, epoch)
 
         # Backward the averaged gradient
         loss /= nAveGrad
@@ -140,13 +166,14 @@ for epoch in range(0, nEpochs):
 
         # Update the weights once in nAveGrad forward passes
         if aveGrad % nAveGrad == 0:
+            writer.add_scalar('data/total_loss_iter', loss.data[0], ii + num_img_tr * epoch)
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
 
     # Save the model
     if (epoch % snapshot) == snapshot - 1 and epoch != 0:
-        torch.save(net.state_dict(), os.path.join(exp_dir, seq_name + '_epoch-'+str(epoch+1) + '.pth'))
+        torch.save(net.state_dict(), os.path.join(save_dir, seq_name + '_epoch-'+str(epoch) + '.pth'))
 
 stop_time = timeit.default_timer()
 print('Online training time: ' + str(stop_time - start_time))
@@ -159,9 +186,9 @@ if vis_res:
     plt.ion()
     f, ax_arr = plt.subplots(1, 3)
 
-save_dir = os.path.join(save_root_dir, seq_name)
-if not os.path.exists(save_dir):
-    os.makedirs(save_dir)
+save_dir_res = os.path.join('Results', seq_name)
+if not os.path.exists(save_dir_res):
+    os.makedirs(save_dir_res)
 
 print('Testing Network')
 # Main Testing Loop
@@ -180,14 +207,14 @@ for ii, sample_batched in enumerate(testloader):
         pred = np.transpose(outputs[-1].cpu().data.numpy()[jj, :, :, :], (1, 2, 0))
         pred = 1 / (1 + np.exp(-pred))
         pred = np.squeeze(pred)
-        img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
-        gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
-        gt_ = np.squeeze(gt)
 
         # Save the result, attention to the index jj
-        sm.imsave(os.path.join(save_dir, os.path.basename(fname[jj]) + '.png'), pred)
+        sm.imsave(os.path.join(save_dir_res, os.path.basename(fname[jj]) + '.png'), pred)
 
         if vis_res:
+            img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
+            gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
+            gt_ = np.squeeze(gt)
             # Plot the particular example
             ax_arr[0].cla()
             ax_arr[1].cla()

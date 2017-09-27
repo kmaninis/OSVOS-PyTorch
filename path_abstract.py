@@ -20,3 +20,17 @@ class PathAbstract(object):
     def custom_pytorch():
         raise NotImplementedError
 
+    @staticmethod
+    def is_custom_opencv():
+        raise NotImplementedError
+
+    @staticmethod
+    def custom_opencv():
+        raise NotImplementedError
+
+    @staticmethod
+    def models_dir():
+        raise NotImplementedError
+    #@staticmethod
+    #def matlab_code():
+    #    raise NotImplementedError
