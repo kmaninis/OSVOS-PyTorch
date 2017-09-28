@@ -54,6 +54,34 @@ def center_crop(x, height, width):
     ])
 
 
+def upsample_filt(size):
+    factor = (size + 1) // 2
+    if size % 2 == 1:
+        center = factor - 1
+    else:
+        center = factor - 0.5
+    og = np.ogrid[:size, :size]
+    return (1 - abs(og[0] - center) / factor) * \
+           (1 - abs(og[1] - center) / factor)
+
+
+# set parameters s.t. deconvolutional layers compute bilinear interpolation
+# this is for deconvolution without groups
+def interp_surgery(lay):
+        m, k, h, w = lay.weight.data.size()
+        if m != k:
+            print 'input + output channels need to be the same'
+            raise
+        if h != w:
+            print 'filters need to be square'
+            raise
+        filt = upsample_filt(h)
+
+        for i in range(m):
+            lay.weight[i, i, :, :].data.copy_(torch.from_numpy(filt))
+
+        return lay.weight.data
+
 if __name__ == '__main__':
 
     # Output

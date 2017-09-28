@@ -1,14 +1,16 @@
-import torch.nn as nn
-import torch.utils.model_zoo as model_zoo
-import torch
 import math
+import os
 from copy import deepcopy
-from custom_layers import center_crop
-import torch.nn.modules as modules
+
 import numpy as np
 import scipy.io
+import torch
+import torch.nn as nn
+import torch.nn.modules as modules
+import sys
+sys.path.append('OSVOS-PyTorch')
 from mypath import Path
-import os
+from layers.osvos_layers import center_crop, interp_surgery
 
 
 class OSVOS(nn.Module):
@@ -125,34 +127,6 @@ class OSVOS(nn.Module):
                     assert (layer.data.shape == c_b.shape)
                     layer.data = c_b
                     caffe_ind += 1
-
-def upsample_filt(size):
-    factor = (size + 1) // 2
-    if size % 2 == 1:
-        center = factor - 1
-    else:
-        center = factor - 0.5
-    og = np.ogrid[:size, :size]
-    return (1 - abs(og[0] - center) / factor) * \
-           (1 - abs(og[1] - center) / factor)
-
-
-# set parameters s.t. deconvolutional layers compute bilinear interpolation
-# this is for deconvolution without groups
-def interp_surgery(lay):
-        m, k, h, w = lay.weight.data.size()
-        if m != k:
-            print 'input + output channels need to be the same'
-            raise
-        if h != w:
-            print 'filters need to be square'
-            raise
-        filt = upsample_filt(h)
-
-        for i in range(m):
-            lay.weight[i, i, :, :].data.copy_(torch.from_numpy(filt))
-
-        return lay.weight.data
 
 
 def find_conv_layers(_vgg):
