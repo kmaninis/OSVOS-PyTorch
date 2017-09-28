@@ -1,10 +1,15 @@
 # Package Includes
 from __future__ import division
-# import matlab.engine
-import sys
+
 import os
 import socket
+# import matlab.engine
+import sys
 import timeit
+import numpy as np
+import scipy.misc as sm
+from datetime import datetime
+
 if 'experiments' in os.getcwd():
     sys.path.append('../../OSVOS-PyTorch')
 else:
@@ -19,18 +24,18 @@ if Path.is_custom_opencv():
 
 # Custom includes
 import visualize as viz
-import osvos_toolbox as tb
-import vgg_osvos as vo
-from custom_layers import class_balanced_cross_entropy_loss
-import numpy as np
-import scipy.misc as sm
-from datetime import datetime
+from dataloaders import davis_2016 as db
+from dataloaders import custom_transforms as tr
+import networks.vgg_osvos as vo
+from layers.osvos_layers import class_balanced_cross_entropy_loss
+from dataloaders.helpers import *
+
 
 # PyTorch includes
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
-from torchvision import transforms, utils
+from torchvision import transforms
 from torch.utils.data import DataLoader
 
 # Tensorboard include
@@ -76,7 +81,7 @@ load_caffe_vgg = 1
 resume_epoch = 0  # Default is 0, change if want to resume
 
 # Network definition
-modelName = exp_name  # tb.construct_name(p, "OSVOS_parent_exact")
+modelName = exp_name
 if resume_epoch == 0:
     if load_caffe_vgg:
         net = vo.OSVOS(pretrained=2)
@@ -132,16 +137,16 @@ optimizer = optim.SGD([
 
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
-composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
-                                          tb.Resize(),
-                                          # tb.ScaleNRotate(rots=(-30,30), scales=(.75, 1.25)),
-                                          tb.ToTensor()])
+composed_transforms = transforms.Compose([tr.RandomHorizontalFlip(),
+                                          tr.Resize(),
+                                          # tr.ScaleNRotate(rots=(-30,30), scales=(.75, 1.25)),
+                                          tr.ToTensor()])
 # Training dataset and its iterator
-db_train = tb.DAVISDataset(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)
+db_train = db.DAVIS2016(train=True, inputRes=None, db_root_dir=db_root_dir, transform=composed_transforms)
 trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=2)
 
 # Testing dataset and its iterator
-db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor())
+db_test = db.DAVIS2016(train=False, db_root_dir=db_root_dir, transform=tr.ToTensor())
 testloader = DataLoader(db_test, batch_size=testBatch, shuffle=False, num_workers=2)
 
 num_img_tr = len(trainloader)
@@ -238,7 +243,7 @@ writer.close()
 
 # Test parent network
 net = vo.OSVOS(pretrained=0)
-parentModelName = exp_name  # tb.construct_name(p, 'OSVOS_parent_exact')
+parentModelName = exp_name
 net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName + '_epoch-' + str(nEpochs-1) + '.pth'),
                                map_location=lambda storage, loc: storage))
 with open(os.path.join(Path.db_root_dir(), 'val_seqs.txt'), 'r') as f:
@@ -246,7 +251,7 @@ with open(os.path.join(Path.db_root_dir(), 'val_seqs.txt'), 'r') as f:
 seqs = map(lambda seq: seq.strip(), seqs)
 for seq_name in seqs:
     # Testing dataset and its iterator
-    db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
+    db_test = db.DAVIS2016(train=False, db_root_dir=db_root_dir, transform=tr.ToTensor(), seq_name=seq_name)
     testloader = DataLoader(db_test, batch_size=1, shuffle=False, num_workers=2)
 
     save_dir_seq = os.path.join(save_dir, parentModelName, seq_name)

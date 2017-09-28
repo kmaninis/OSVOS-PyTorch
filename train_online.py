@@ -1,7 +1,13 @@
 # Package Includes
 from __future__ import division
-import sys
+
 import os
+import sys
+import numpy as np
+import socket
+import timeit
+from datetime import datetime
+
 if 'experiments' in os.getcwd():
     sys.path.append('../../OSVOS-PyTorch')
 else:
@@ -10,23 +16,20 @@ from mypath import Path
 if Path.is_custom_pytorch():
     sys.path.append(Path.custom_pytorch())  # Custom PyTorch
 
-import numpy as np
-import socket
-import timeit
-from datetime import datetime
-
 # Custom includes
-import osvos_toolbox as tb  # import cv2 after import torch
+from dataloaders import davis_2016 as db
+from dataloaders import custom_transforms as tr
 import visualize as viz
 import scipy.misc as sm
-import vgg_osvos as vo
-from custom_layers import class_balanced_cross_entropy_loss
+import networks.vgg_osvos as vo
+from layers.osvos_layers import class_balanced_cross_entropy_loss
+from dataloaders.helpers import *
 
 # PyTorch includes
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
-from torchvision import transforms, utils
+from torchvision import transforms
 from torch.utils.data import DataLoader
 
 # Tensorboard include
@@ -60,7 +63,7 @@ p = {
     'trainBatch': 1,  # Number of Images in each mini-batch
     }
 
-parentModelName = 'OSVOS_parent_vgg_caffe_trainBatch-1'#exp_name  # tb.construct_name(p, 'OSVOS_parent_exact')
+parentModelName = exp_name
 # Select which GPU, -1 if CPU
 if socket.gethostname() == 'eec':
     gpu_id = 1
@@ -111,16 +114,16 @@ optimizer = optim.SGD([
 
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
-composed_transforms = transforms.Compose([tb.RandomHorizontalFlip(),
-                                          tb.Resize(),
-                                          # tb.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
-                                          tb.ToTensor()])
+composed_transforms = transforms.Compose([tr.RandomHorizontalFlip(),
+                                          tr.Resize(),
+                                          # tr.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
+                                          tr.ToTensor()])
 # Training dataset and its iterator
-db_train = tb.DAVISDataset(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
+db_train = db.DAVIS2016(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
 trainloader = DataLoader(db_train, batch_size=p['trainBatch'], shuffle=True, num_workers=1)
 
 # Testing dataset and its iterator
-db_test = tb.DAVISDataset(train=False, db_root_dir=db_root_dir, transform=tb.ToTensor(), seq_name=seq_name)
+db_test = db.DAVIS2016(train=False, db_root_dir=db_root_dir, transform=tr.ToTensor(), seq_name=seq_name)
 testloader = DataLoader(db_test, batch_size=1, shuffle=False, num_workers=1)
 
 
@@ -222,7 +225,7 @@ for ii, sample_batched in enumerate(testloader):
             ax_arr[0].set_title('Input Image')
             ax_arr[1].set_title('Ground Truth')
             ax_arr[2].set_title('Detection')
-            ax_arr[0].imshow(tb.im_normalize(img_))
+            ax_arr[0].imshow(im_normalize(img_))
             ax_arr[1].imshow(gt_)
-            ax_arr[2].imshow(tb.im_normalize(pred))
+            ax_arr[2].imshow(im_normalize(pred))
             plt.pause(0.001)
