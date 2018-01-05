@@ -39,7 +39,7 @@ if not os.path.exists(save_dir):
 vis_net = 0  # Visualize the network?
 vis_res = 0  # Visualize the results?
 nAveGrad = 5
-nEpochs = 500 * nAveGrad  # Number of epochs for training
+nEpochs = 2000 * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
 parentEpoch = 240
 
