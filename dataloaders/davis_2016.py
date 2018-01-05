@@ -1,17 +1,11 @@
 from __future__ import division
-import sys
-from helpers import *
 
-from mypath import Path
-if Path.is_custom_pytorch():
-    sys.path.append(Path.custom_pytorch())  # Custom PyTorch
-if Path.is_custom_opencv():
-    sys.path.insert(0, Path.custom_opencv())
-
+import os
 import numpy as np
 import cv2
 from scipy.misc import imresize
-import os
+
+from dataloaders.helpers import *
 from torch.utils.data import Dataset
 
 
@@ -48,16 +42,16 @@ class DAVIS2016(Dataset):
                 labels = []
                 for seq in seqs:
                     images = np.sort(os.listdir(os.path.join(db_root_dir, 'JPEGImages/480p/', seq.strip())))
-                    images_path = map(lambda x: os.path.join('JPEGImages/480p/', seq.strip(), x), images)
+                    images_path = list(map(lambda x: os.path.join('JPEGImages/480p/', seq.strip(), x), images))
                     img_list.extend(images_path)
                     lab = np.sort(os.listdir(os.path.join(db_root_dir, 'Annotations/480p/', seq.strip())))
-                    lab_path = map(lambda x: os.path.join('Annotations/480p/', seq.strip(), x), lab)
+                    lab_path = list(map(lambda x: os.path.join('Annotations/480p/', seq.strip(), x), lab))
                     labels.extend(lab_path)
         else:
 
             # Initialize the per sequence images for online training
             names_img = np.sort(os.listdir(os.path.join(db_root_dir, 'JPEGImages/480p/', str(seq_name))))
-            img_list = map(lambda x: os.path.join('JPEGImages/480p/', str(seq_name), x), names_img)
+            img_list = list(map(lambda x: os.path.join('JPEGImages/480p/', str(seq_name), x), names_img))
             name_label = np.sort(os.listdir(os.path.join(db_root_dir, 'Annotations/480p/', str(seq_name))))
             labels = [os.path.join('Annotations/480p/', str(seq_name), name_label[0])]
             labels.extend([None]*(len(names_img)-1))
@@ -76,7 +70,6 @@ class DAVIS2016(Dataset):
         return len(self.img_list)
 
     def __getitem__(self, idx):
-        # print(idx)
         img, gt = self.make_img_gt_pair(idx)
 
         sample = {'image': img, 'gt': gt}
@@ -101,7 +94,6 @@ class DAVIS2016(Dataset):
             gt = np.zeros(img.shape[:-1], dtype=np.uint8)
 
         if self.inputRes is not None:
-            # inputRes = list(reversed(self.inputRes))
             img = imresize(img, self.inputRes)
             if self.labels[idx] is not None:
                 label = imresize(label, self.inputRes, interp='nearest')
@@ -127,8 +119,6 @@ if __name__ == '__main__':
     from torchvision import transforms
     from matplotlib import pyplot as plt
 
-    # transforms = transforms.Compose([RandomHorizontalFlip(),
-    #                                  ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25))])
     transforms = transforms.Compose([tr.RandomHorizontalFlip(), tr.Resize(scales=[0.5, 0.8, 1]), tr.ToTensor()])
 
     dataset = DAVIS2016(db_root_dir='/media/eec/external/Databases/Segmentation/DAVIS-2016',

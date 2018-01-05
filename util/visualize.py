@@ -61,9 +61,6 @@ def make_dot(var, params):
 if __name__ == "__main__":
     inputs = torch.randn(1, 3, 224, 224)
     resnet18 = models.resnet18()
-    # vgg16 = models.vgg16()
-    # vgg16_pre = models.vgg16(pretrained=True)
     y = resnet18(Variable(inputs))
-    # print(y)
     g = make_dot(y, resnet18.state_dict())
     g.view()

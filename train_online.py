@@ -2,28 +2,10 @@
 from __future__ import division
 
 import os
-import sys
-import numpy as np
 import socket
 import timeit
 from datetime import datetime
-
-if 'experiments' in os.getcwd():
-    sys.path.append('../../OSVOS-PyTorch')
-else:
-    sys.path.append('OSVOS-PyTorch')
-from mypath import Path
-if Path.is_custom_pytorch():
-    sys.path.append(Path.custom_pytorch())  # Custom PyTorch
-
-# Custom includes
-from dataloaders import davis_2016 as db
-from dataloaders import custom_transforms as tr
-import visualize as viz
-import scipy.misc as sm
-import networks.vgg_osvos as vo
-from layers.osvos_layers import class_balanced_cross_entropy_loss
-from dataloaders.helpers import *
+from tensorboardX import SummaryWriter
 
 # PyTorch includes
 import torch
@@ -32,8 +14,15 @@ import torch.optim as optim
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-# Tensorboard include
-from tensorboardX import SummaryWriter
+# Custom includes
+from dataloaders import davis_2016 as db
+from dataloaders import custom_transforms as tr
+from util import visualize as viz
+import scipy.misc as sm
+import networks.vgg_osvos as vo
+from layers.osvos_layers import class_balanced_cross_entropy_loss
+from dataloaders.helpers import *
+from mypath import Path
 
 # Setting of parameters
 if 'SEQ_NAME' not in os.environ.keys():
@@ -42,19 +31,15 @@ else:
     seq_name = str(os.environ['SEQ_NAME'])
 
 db_root_dir = Path.db_root_dir()
-save_dir_root = Path.save_root_dir()
-exp_name = os.path.dirname(os.path.abspath(__file__)).split('/')[-1]
-
-save_dir = './models'
+save_dir = Path.save_root_dir()
 
 if not os.path.exists(save_dir):
     os.makedirs(os.path.join(save_dir))
 
-exp_dir = Path.exp_dir()
 vis_net = 0  # Visualize the network?
 vis_res = 0  # Visualize the results?
 nAveGrad = 5
-nEpochs = 2000 * nAveGrad  # Number of epochs for training
+nEpochs = 500 * nAveGrad  # Number of epochs for training
 snapshot = nEpochs  # Store a model every snapshot epochs
 parentEpoch = 240
 
@@ -62,15 +47,11 @@ parentEpoch = 240
 p = {
     'trainBatch': 1,  # Number of Images in each mini-batch
     }
+seed = 0
 
-parentModelName = exp_name
+parentModelName = 'parent'
 # Select which GPU, -1 if CPU
-if socket.gethostname() == 'eec':
-    gpu_id = 1
-elif 'SGE_GPU' not in os.environ.keys() and socket.gethostname() != 'reinhold':
-    gpu_id = -1
-else:
-    gpu_id = int(os.environ['SGE_GPU'])
+gpu_id = 0
 
 # Network definition
 net = vo.OSVOS(pretrained=0)
@@ -80,8 +61,6 @@ net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName+'_epoch-'+
 # Logging into Tensorboard
 log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname()+'-'+seq_name)
 writer = SummaryWriter(log_dir=log_dir)
-# y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
-# writer.add_graph(net, y[-1])
 
 if gpu_id >= 0:
     torch.cuda.set_device(device=gpu_id)
@@ -115,8 +94,7 @@ optimizer = optim.SGD([
 # Preparation of the data loaders
 # Define augmentation transformations as a composition
 composed_transforms = transforms.Compose([tr.RandomHorizontalFlip(),
-                                          tr.Resize(),
-                                          # tr.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
+                                          tr.ScaleNRotate(rots=(-30, 30), scales=(.75, 1.25)),
                                           tr.ToTensor()])
 # Training dataset and its iterator
 db_train = db.DAVIS2016(train=True, db_root_dir=db_root_dir, transform=composed_transforms, seq_name=seq_name)
@@ -138,6 +116,7 @@ start_time = timeit.default_timer()
 for epoch in range(0, nEpochs):
     # One training epoch
     running_loss_tr = 0
+    np.random.seed(seed + epoch)
     for ii, sample_batched in enumerate(trainloader):
 
         inputs, gts = sample_batched['image'], sample_batched['gt']
@@ -189,7 +168,7 @@ if vis_res:
     plt.ion()
     f, ax_arr = plt.subplots(1, 3)
 
-save_dir_res = os.path.join('Results', seq_name)
+save_dir_res = os.path.join(save_dir, 'Results', seq_name)
 if not os.path.exists(save_dir_res):
     os.makedirs(save_dir_res)
 
@@ -229,3 +208,5 @@ for ii, sample_batched in enumerate(testloader):
             ax_arr[1].imshow(gt_)
             ax_arr[2].imshow(im_normalize(pred))
             plt.pause(0.001)
+
+writer.close()

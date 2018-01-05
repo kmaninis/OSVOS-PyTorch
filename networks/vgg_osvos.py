@@ -1,16 +1,16 @@
+from __future__ import division
+
 import math
 import os
 from copy import deepcopy
-
-import numpy as np
 import scipy.io
+
 import torch
 import torch.nn as nn
 import torch.nn.modules as modules
-import sys
-sys.path.append('OSVOS-PyTorch')
-from mypath import Path
+
 from layers.osvos_layers import center_crop, interp_surgery
+from mypath import Path
 
 
 class OSVOS(nn.Module):
@@ -42,7 +42,6 @@ class OSVOS(nn.Module):
 
                 # Make the layers of the score_dsn step
                 score_dsn.append(nn.Conv2d(16, 1, kernel_size=1, padding=0))
-                # upscale.append(nn.Upsample(scale_factor=2 ** i, mode='bilinear'))
                 upscale_.append(nn.ConvTranspose2d(1, 1, kernel_size=2 ** (1 + i), stride=2 ** i, bias=False))
                 upscale.append(nn.ConvTranspose2d(16, 16, kernel_size=2 ** (1 + i), stride=2 ** i, bias=False))
 
@@ -97,11 +96,8 @@ class OSVOS(nn.Module):
             _vgg = VGG(make_layers(vgg_structure))
 
             # Load the weights from saved model
-            _vgg.load_state_dict(torch.load(os.path.join(Path.models_dir(), 'vgg16-397923af.pth'),
+            _vgg.load_state_dict(torch.load(os.path.join(Path.models_dir(), 'vgg_pytorch.pth'),
                                             map_location=lambda storage, loc: storage))
-
-            # Load the weights directly from the web
-            # _vgg.load_state_dict(model_zoo.load_url('https://download.pytorch.org/models/vgg16-397923af.pth'))
 
             inds = find_conv_layers(_vgg)
             k = 0
@@ -114,7 +110,7 @@ class OSVOS(nn.Module):
         elif pretrained == 2:
             print("Loading weights from Caffe VGG")
             # Load weights from Caffe
-            caffe_weights = scipy.io.loadmat(os.path.join(Path.models_dir(),'vgg_hed_caffe.mat'))
+            caffe_weights = scipy.io.loadmat(os.path.join(Path.models_dir(), 'vgg_caffe.mat'))
             # Core network
             caffe_ind = 0
             for ind, layer in enumerate(self.stages.parameters()):

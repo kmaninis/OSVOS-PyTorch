@@ -1,7 +1,9 @@
 from __future__ import division
+
 import numpy as np
-import torch
 from PIL import Image
+
+import torch
 from torch.autograd import Variable
 from torch.nn import functional as F
 
@@ -14,7 +16,7 @@ def sigmoid_np(x):
     return 1/(1+np.exp(-x))
 
 
-def class_balanced_cross_entropy_loss(output, label, size_average=True):
+def class_balanced_cross_entropy_loss(output, label, size_average=True, batch_average=True):
     """Define the class balanced cross entropy loss to train the network
     Args:
     output: Output of the network
@@ -39,7 +41,9 @@ def class_balanced_cross_entropy_loss(output, label, size_average=True):
     final_loss = num_labels_neg / num_total * loss_pos + num_labels_pos / num_total * loss_neg
 
     if size_average:
-        final_loss = final_loss/(label.size()[0] * label.size()[1] * label.size()[2] * label.size()[3])
+        final_loss /= np.prod(label.size())
+    elif batch_average:
+        final_loss /= label.size()[0]
 
     return final_loss
 
@@ -70,11 +74,11 @@ def upsample_filt(size):
 def interp_surgery(lay):
         m, k, h, w = lay.weight.data.size()
         if m != k:
-            print 'input + output channels need to be the same'
-            raise
+            print('input + output channels need to be the same')
+            raise ValueError
         if h != w:
-            print 'filters need to be square'
-            raise
+            print('filters need to be square')
+            raise ValueError
         filt = upsample_filt(h)
 
         for i in range(m):
@@ -82,17 +86,20 @@ def interp_surgery(lay):
 
         return lay.weight.data
 
+
 if __name__ == '__main__':
+    import os
+    from mypath import Path
 
     # Output
-    output = Image.open('/home/eec/reinhold/glusterfs/Databases/Boundary_Detection/DAVIS/Annotations/480p/blackswan/00000.png')
+    output = Image.open(os.path.join(Path.db_root_dir(), 'Annotations/480p/blackswan/00000.png'))
     output = np.asarray(output, dtype=np.float32)/255.0
     output = logit(output)
-    output = Variable(torch.from_numpy(output)).cuda(device_id=1)
+    output = Variable(torch.from_numpy(output)).cuda()
 
     # GroundTruth
-    label = Image.open('/home/eec/reinhold/glusterfs/Databases/Boundary_Detection/DAVIS/Annotations/480p/blackswan/00001.png')
-    label = Variable(torch.from_numpy(np.asarray(label, dtype=np.float32))/255.0).cuda(device_id=1)
+    label = Image.open(os.path.join(Path.db_root_dir(), 'Annotations/480p/blackswan/00001.png'))
+    label = Variable(torch.from_numpy(np.asarray(label, dtype=np.float32))/255.0).cuda()
 
     loss = class_balanced_cross_entropy_loss(output, label)
     print(loss)

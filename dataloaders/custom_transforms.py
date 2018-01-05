@@ -29,28 +29,25 @@ class ScaleNRotate(object):
                  (self.scales[1] - self.scales[0]) / 2 + 1
         elif type(self.rots) == list:
             # Fixed range of scales and rotations
-            rot = self.rots[random.randint(0, len(self.rots)-1)]
-            sc = self.scales[random.randint(0, len(self.scales) - 1)]
+            rot = self.rots[random.randint(0, len(self.rots))]
+            sc = self.scales[random.randint(0, len(self.scales))]
 
         for elem in sample.keys():
+            if 'fname' in elem:
+                continue
+
             tmp = sample[elem]
 
             h, w = tmp.shape[:2]
             center = (w / 2, h / 2)
+            assert(center != 0)  # Strange behaviour warpAffine
             M = cv2.getRotationMatrix2D(center, rot, sc)
 
-            if tmp.ndim==2:
+            if ((tmp == 0) | (tmp == 1)).all():
                 flagval = cv2.INTER_NEAREST
             else:
                 flagval = cv2.INTER_CUBIC
-
             tmp = cv2.warpAffine(tmp, M, (w, h), flags=flagval)
-
-            if tmp.min() < 0.0:
-                tmp = tmp - tmp.min()
-
-            if tmp.max() > 1.0:
-                tmp = tmp / tmp.max()
 
             sample[elem] = tmp
 
@@ -71,9 +68,11 @@ class Resize(object):
         sc = self.scales[random.randint(0, len(self.scales) - 1)]
 
         for elem in sample.keys():
+            if 'fname' in elem:
+                continue
             tmp = sample[elem]
 
-            if tmp.ndim==2:
+            if tmp.ndim == 2:
                 flagval = cv2.INTER_NEAREST
             else:
                 flagval = cv2.INTER_CUBIC
@@ -92,6 +91,8 @@ class RandomHorizontalFlip(object):
 
         if random.random() < 0.5:
             for elem in sample.keys():
+                if 'fname' in elem:
+                    continue
                 tmp = sample[elem]
                 tmp = cv2.flip(tmp, flipCode=1)
                 sample[elem] = tmp
@@ -105,6 +106,8 @@ class ToTensor(object):
     def __call__(self, sample):
 
         for elem in sample.keys():
+            if 'fname' in elem:
+                continue
             tmp = sample[elem]
 
             if tmp.ndim == 2:
