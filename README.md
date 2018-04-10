@@ -23,7 +23,7 @@ This PyTorch code is a posteriori implementation of OSVOS and it does not contai
 
 ### Online training and testing
 1. Download the [parent model](https://data.vision.ee.ethz.ch/kmaninis/share/OSVOS/Downloads/models/pth_parent_model.zip) (55 MB), and unzip it under `models/`.
-2. Edit in file `osvos_demo.py` the 'User defined parameters' (eg. gpu_id, etc).
+2. Edit in file ` train_online.py` the 'User defined parameters' (eg. gpu_id, etc).
 3. Run `python train_online.py`.
 
 ### Training the parent network (optional)
