@@ -29,6 +29,7 @@ This PyTorch code is a posteriori implementation of OSVOS and it does not contai
 ### Training the parent network (optional)
 1. All the training sequences of DAVIS 2016 are required to train the parent model, thus download them from [here](https://graphics.ethz.ch/Downloads/Data/Davis/DAVIS-data.zip).
 2. Download the [VGG model](https://data.vision.ee.ethz.ch/kmaninis/share/OSVOS/Downloads/models/vgg_mat.zip) (55 MB) pretrained on ImageNet, and unzip it under `models/`.
+3. Place the files with the [train](https://github.com/kmaninis/OSVOS-PyTorch/files/1938742/train_seqs.txt) and [test](https://github.com/kmaninis/OSVOS-PyTorch/files/1938743/val_seqs.txt) sequences names in the DAVIS root folder (`db_root_dir()` in `mypath.py`).
 3. Edit the 'User defined parameters' (eg. gpu_id) in file `train_parent.py`.
 4. Run `train_parent.py`. This step takes 20 hours to train (Titan-X Pascal).
 
