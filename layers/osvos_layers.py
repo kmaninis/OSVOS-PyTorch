@@ -52,10 +52,8 @@ def center_crop(x, height, width):
     crop_h = torch.FloatTensor([x.size()[2]]).sub(height).div(-2)
     crop_w = torch.FloatTensor([x.size()[3]]).sub(width).div(-2)
 
-    return F.pad(x, [
-        crop_w.ceil().int()[0], crop_w.floor().int()[0],
-        crop_h.ceil().int()[0], crop_h.floor().int()[0],
-    ])
+    # fixed indexing for PyTorch 0.4
+    return F.pad(x, [int(crop_w.ceil()[0]), int(crop_w.floor()[0]), int(crop_h.ceil()[0]), int(crop_h.floor()[0])])
 
 
 def upsample_filt(size):

@@ -24,7 +24,10 @@ from mypath import Path
 
 # Select which GPU, -1 if CPU
 gpu_id = 0
-print('Using GPU: {} '.format(gpu_id))
+device = torch.device("cuda:"+str(gpu_id) if torch.cuda.is_available() else "cpu")
+
+if torch.cuda.is_available():
+    print('Using GPU: {} '.format(gpu_id))
 
 # Setting of parameters
 # Parameters in p are used for the name of the model
@@ -62,11 +65,10 @@ else:
         torch.load(os.path.join(save_dir, modelName + '_epoch-' + str(resume_epoch - 1) + '.pth'),
                    map_location=lambda storage, loc: storage))
 
+
 # Logging into Tensorboard
 log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname())
 writer = SummaryWriter(log_dir=log_dir, comment='-parent')
-y = net.forward(Variable(torch.randn(1, 3, 480, 854)))
-writer.add_graph(net, y[-1])
 
 # Visualize the network
 if vis_net:
@@ -76,9 +78,7 @@ if vis_net:
     g = viz.make_dot(y, net.state_dict())
     g.view()
 
-if gpu_id >= 0:
-    torch.cuda.set_device(device=gpu_id)
-    net.cuda()
+net.to(device)  # PyTorch 0.4.0 style
 
 # Use the following optimizer
 lr = 1e-8
@@ -133,9 +133,8 @@ for epoch in range(resume_epoch, nEpochs):
         inputs, gts = sample_batched['image'], sample_batched['gt']
 
         # Forward-Backward of the mini-batch
-        inputs, gts = Variable(inputs), Variable(gts)
-        if gpu_id >= 0:
-            inputs, gts = inputs.cuda(), gts.cuda()
+        inputs.requires_grad_()
+        inputs, gts = inputs.to(device), gts.to(device)
 
         outputs = net.forward(inputs)
 
@@ -143,7 +142,7 @@ for epoch in range(resume_epoch, nEpochs):
         losses = [0] * len(outputs)
         for i in range(0, len(outputs)):
             losses[i] = class_balanced_cross_entropy_loss(outputs[i], gts, size_average=False)
-            running_loss_tr[i] += losses[i].data[0]
+            running_loss_tr[i] += losses[i].item()
         loss = (1 - epoch / nEpochs)*sum(losses[:-1]) + losses[-1]
 
         # Print stuff
@@ -166,7 +165,7 @@ for epoch in range(resume_epoch, nEpochs):
 
         # Update the weights once in nAveGrad forward passes
         if aveGrad % nAveGrad == 0:
-            writer.add_scalar('data/total_loss_iter', loss.data[0], ii + num_img_tr * epoch)
+            writer.add_scalar('data/total_loss_iter', loss.item(), ii + num_img_tr * epoch)
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
@@ -177,32 +176,31 @@ for epoch in range(resume_epoch, nEpochs):
 
     # One testing epoch
     if useTest and epoch % nTestInterval == (nTestInterval - 1):
-        for ii, sample_batched in enumerate(testloader):
-            inputs, gts = sample_batched['image'], sample_batched['gt']
+        with torch.no_grad():
+            for ii, sample_batched in enumerate(testloader):
+                inputs, gts = sample_batched['image'], sample_batched['gt']
 
-            # Forward pass of the mini-batch
-            inputs, gts = Variable(inputs, volatile=True), Variable(gts, volatile=True)
-            if gpu_id >= 0:
-                inputs, gts = inputs.cuda(), gts.cuda()
+                # Forward pass of the mini-batch
+                inputs, gts = inputs.to(device), gts.to(device)
 
-            outputs = net.forward(inputs)
+                outputs = net.forward(inputs)
 
-            # Compute the losses, side outputs and fuse
-            losses = [0] * len(outputs)
-            for i in range(0, len(outputs)):
-                losses[i] = class_balanced_cross_entropy_loss(outputs[i], gts, size_average=False)
-                running_loss_ts[i] += losses[i].data[0]
-            loss = (1 - epoch / nEpochs) * sum(losses[:-1]) + losses[-1]
+                # Compute the losses, side outputs and fuse
+                losses = [0] * len(outputs)
+                for i in range(0, len(outputs)):
+                    losses[i] = class_balanced_cross_entropy_loss(outputs[i], gts, size_average=False)
+                    running_loss_ts[i] += losses[i].item()
+                loss = (1 - epoch / nEpochs) * sum(losses[:-1]) + losses[-1]
 
-            # Print stuff
-            if ii % num_img_ts == num_img_ts - 1:
-                running_loss_ts = [x / num_img_ts for x in running_loss_ts]
-                loss_ts.append(running_loss_ts[-1])
+                # Print stuff
+                if ii % num_img_ts == num_img_ts - 1:
+                    running_loss_ts = [x / num_img_ts for x in running_loss_ts]
+                    loss_ts.append(running_loss_ts[-1])
 
-                print('[Epoch: %d, numImages: %5d]' % (epoch, ii + 1))
-                writer.add_scalar('data/test_loss_epoch', running_loss_ts[-1], epoch)
-                for l in range(0, len(running_loss_ts)):
-                    print('***Testing *** Loss %d: %f' % (l, running_loss_ts[l]))
-                    running_loss_ts[l] = 0
+                    print('[Epoch: %d, numImages: %5d]' % (epoch, ii + 1))
+                    writer.add_scalar('data/test_loss_epoch', running_loss_ts[-1], epoch)
+                    for l in range(0, len(running_loss_ts)):
+                        print('***Testing *** Loss %d: %f' % (l, running_loss_ts[l]))
+                        running_loss_ts[l] = 0
 
 writer.close()

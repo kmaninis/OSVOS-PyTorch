@@ -16,8 +16,8 @@ This PyTorch code is a posteriori implementation of OSVOS and it does not contai
 2. Install - if necessary - the required dependencies:
    
    - Python (tested with Anaconda 2.7 and 3.6) 
-   - PyTorch (`conda install pytorch torchvision -c pytorch` - tested with PyTorch 0.3, CUDA 8.0)
-   - Other python dependencies: numpy, scipy, matplotlib, opencv-python
+   - PyTorch (`conda install pytorch torchvision -c pytorch` - tested with PyTorch 0.4, CUDA 8.0 and 9.0)
+   - Other python dependencies: numpy, scipy, matplotlib, opencv-python, graphviz.
    - Optionally, install tensorboard (`pip install tensorboard tensorboardx`)
 3. Edit the paths in mypath.py
 

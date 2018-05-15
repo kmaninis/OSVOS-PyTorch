@@ -52,6 +52,7 @@ seed = 0
 parentModelName = 'parent'
 # Select which GPU, -1 if CPU
 gpu_id = 0
+device = torch.device("cuda:"+str(gpu_id) if torch.cuda.is_available() else "cpu")
 
 # Network definition
 net = vo.OSVOS(pretrained=0)
@@ -61,10 +62,6 @@ net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName+'_epoch-'+
 # Logging into Tensorboard
 log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname()+'-'+seq_name)
 writer = SummaryWriter(log_dir=log_dir)
-
-if gpu_id >= 0:
-    torch.cuda.set_device(device=gpu_id)
-    net.cuda()
 
 # Visualize the network
 if vis_net:
@@ -76,6 +73,7 @@ if vis_net:
     g = viz.make_dot(y, net.state_dict())
     g.view()
 
+net.to(device)  # PyTorch 0.4.0 style
 
 # Use the following optimizer
 lr = 1e-8
@@ -122,15 +120,14 @@ for epoch in range(0, nEpochs):
         inputs, gts = sample_batched['image'], sample_batched['gt']
 
         # Forward-Backward of the mini-batch
-        inputs, gts = Variable(inputs), Variable(gts)
-        if gpu_id >= 0:
-            inputs, gts = inputs.cuda(), gts.cuda()
+        inputs.requires_grad_()
+        inputs, gts = inputs.to(device), gts.to(device)
 
         outputs = net.forward(inputs)
 
         # Compute the fuse loss
         loss = class_balanced_cross_entropy_loss(outputs[-1], gts, size_average=False)
-        running_loss_tr += loss.data[0]
+        running_loss_tr += loss.item()  # PyTorch 0.4.0 style
 
         # Print stuff
         if epoch % (nEpochs//20) == (nEpochs//20 - 1):
@@ -148,7 +145,7 @@ for epoch in range(0, nEpochs):
 
         # Update the weights once in nAveGrad forward passes
         if aveGrad % nAveGrad == 0:
-            writer.add_scalar('data/total_loss_iter', loss.data[0], ii + num_img_tr * epoch)
+            writer.add_scalar('data/total_loss_iter', loss.item(), ii + num_img_tr * epoch)
             optimizer.step()
             optimizer.zero_grad()
             aveGrad = 0
@@ -172,41 +169,41 @@ save_dir_res = os.path.join(save_dir, 'Results', seq_name)
 if not os.path.exists(save_dir_res):
     os.makedirs(save_dir_res)
 
+
 print('Testing Network')
-# Main Testing Loop
-for ii, sample_batched in enumerate(testloader):
+with torch.no_grad():  # PyTorch 0.4.0 style
+    # Main Testing Loop
+    for ii, sample_batched in enumerate(testloader):
 
-    img, gt, fname = sample_batched['image'], sample_batched['gt'], sample_batched['fname']
+        img, gt, fname = sample_batched['image'], sample_batched['gt'], sample_batched['fname']
 
-    # Forward of the mini-batch
-    inputs, gts = Variable(img, volatile=True), Variable(gt, volatile=True)
-    if gpu_id >= 0:
-        inputs, gts = inputs.cuda(), gts.cuda()
+        # Forward of the mini-batch
+        inputs, gts = img.to(device), gt.to(device)
 
-    outputs = net.forward(inputs)
+        outputs = net.forward(inputs)
 
-    for jj in range(int(inputs.size()[0])):
-        pred = np.transpose(outputs[-1].cpu().data.numpy()[jj, :, :, :], (1, 2, 0))
-        pred = 1 / (1 + np.exp(-pred))
-        pred = np.squeeze(pred)
+        for jj in range(int(inputs.size()[0])):
+            pred = np.transpose(outputs[-1].cpu().data.numpy()[jj, :, :, :], (1, 2, 0))
+            pred = 1 / (1 + np.exp(-pred))
+            pred = np.squeeze(pred)
 
-        # Save the result, attention to the index jj
-        sm.imsave(os.path.join(save_dir_res, os.path.basename(fname[jj]) + '.png'), pred)
+            # Save the result, attention to the index jj
+            sm.imsave(os.path.join(save_dir_res, os.path.basename(fname[jj]) + '.png'), pred)
 
-        if vis_res:
-            img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
-            gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
-            gt_ = np.squeeze(gt)
-            # Plot the particular example
-            ax_arr[0].cla()
-            ax_arr[1].cla()
-            ax_arr[2].cla()
-            ax_arr[0].set_title('Input Image')
-            ax_arr[1].set_title('Ground Truth')
-            ax_arr[2].set_title('Detection')
-            ax_arr[0].imshow(im_normalize(img_))
-            ax_arr[1].imshow(gt_)
-            ax_arr[2].imshow(im_normalize(pred))
-            plt.pause(0.001)
+            if vis_res:
+                img_ = np.transpose(img.numpy()[jj, :, :, :], (1, 2, 0))
+                gt_ = np.transpose(gt.numpy()[jj, :, :, :], (1, 2, 0))
+                gt_ = np.squeeze(gt)
+                # Plot the particular example
+                ax_arr[0].cla()
+                ax_arr[1].cla()
+                ax_arr[2].cla()
+                ax_arr[0].set_title('Input Image')
+                ax_arr[1].set_title('Ground Truth')
+                ax_arr[2].set_title('Detection')
+                ax_arr[0].imshow(im_normalize(img_))
+                ax_arr[1].imshow(gt_)
+                ax_arr[2].imshow(im_normalize(pred))
+                plt.pause(0.001)
 
 writer.close()
