@@ -9,7 +9,6 @@ from tensorboardX import SummaryWriter
 
 # PyTorch includes
 import torch
-from torch.autograd import Variable
 import torch.optim as optim
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -63,17 +62,16 @@ net.load_state_dict(torch.load(os.path.join(save_dir, parentModelName+'_epoch-'+
 log_dir = os.path.join(save_dir, 'runs', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname()+'-'+seq_name)
 writer = SummaryWriter(log_dir=log_dir)
 
+net.to(device)  # PyTorch 0.4.0 style
+
 # Visualize the network
 if vis_net:
     x = torch.randn(1, 3, 480, 854)
-    x = Variable(x)
-    if gpu_id >= 0:
-        x = x.cuda()
+    x.requires_grad_()
+    x = x.to(device)
     y = net.forward(x)
     g = viz.make_dot(y, net.state_dict())
     g.view()
-
-net.to(device)  # PyTorch 0.4.0 style
 
 # Use the following optimizer
 lr = 1e-8
